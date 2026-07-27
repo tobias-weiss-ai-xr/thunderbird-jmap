@@ -1,0 +1,10 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+/**
+ * Placeholder for the JMAP outgoing server interface.
+ * JMAP uses EmailSubmission/set for sending, which goes through the
+ * same server connection. The outgoing server implementation will
+ * be added once the message submission flow is complete.
+ */

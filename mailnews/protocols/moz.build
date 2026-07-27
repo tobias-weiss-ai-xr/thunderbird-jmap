@@ -1,0 +1,19 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+with Files("**"):
+    BUG_COMPONENT = ("Mailnews Core", "Networking: Exchange")
+
+with Files("jmap/**"):
+    BUG_COMPONENT = ("Mailnews Core", "Networking: JMAP")
+
+DIRS += [
+    "common",
+    "exchange/public",
+    "exchange/src",
+    "jmap/public",
+    "jmap/src",
+]
+
+TEST_DIRS += ["exchange/test", "jmap/test"]

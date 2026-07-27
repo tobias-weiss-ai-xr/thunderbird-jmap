@@ -1,0 +1,38 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+EXPORTS += [
+    "JmapClient.h",
+    "JmapFolder.h",
+    "JmapIncomingServer.h",
+    "JmapProtocolInfo.h",
+    "JmapProtocolHandler.h",
+    "JmapService.h",
+    "JmapUtils.h",
+]
+
+UNIFIED_SOURCES += [
+    "JmapClient.cpp",
+    "JmapFolder.cpp",
+    "JmapIncomingServer.cpp",
+    "JmapListeners.cpp",
+    "JmapProtocolHandler.cpp",
+    "JmapProtocolInfo.cpp",
+    "JmapService.cpp",
+    "JmapUtils.cpp",
+]
+
+XPCOM_MANIFESTS += [
+    "components.conf",
+]
+
+XPIDL_MODULE = "msgjmap"
+
+XPIDL_SOURCES += [
+    "IJmapClient.idl",
+    "IJmapFolder.idl",
+    "IJmapIncomingServer.idl",
+]
+
+FINAL_LIBRARY = "mail"
