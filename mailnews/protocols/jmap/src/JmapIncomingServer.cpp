@@ -8,6 +8,7 @@
 #include "JmapClient.h"
 #include "JmapFolder.h"
 #include "JmapFolderSyncListener.h"
+#include "JmapMessageSyncListener.h"
 #include "mozilla/Logging.h"
 #include "nsComponentManagerUtils.h"
 #include "nsIMsgFolder.h"
@@ -217,14 +218,11 @@ JmapIncomingServer::GetNewMessages(nsIMsgFolder* aFolder,
     syncState.Truncate();
   }
 
-  // Create a message sync listener that will update the local database
+  // Create a message sync listener that will populate the local database
   // with fetched message IDs.
-  // For now we trigger the sync and rely on the folder notification system.
-  RefPtr<IJmapMessageListener> msgListener;
-  // TODO: Create a proper JmapMessageSyncListener that populates the
-  // local database with message headers from the server.
-  // For now, use a simple callback-based approach.
-  rv = client->SyncMessages(nullptr, mailboxId, syncState);
+  RefPtr<JmapMessageSyncListener> msgListener =
+      new JmapMessageSyncListener(aFolder, aMsgWindow);
+  rv = client->SyncMessages(msgListener, mailboxId, syncState);
   NS_ENSURE_SUCCESS(rv, rv);
 
   // Notify the URL listener that we're done.

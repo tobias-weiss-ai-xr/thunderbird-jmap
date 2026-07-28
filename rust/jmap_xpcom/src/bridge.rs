@@ -58,6 +58,15 @@ impl XpcomJmapBridge {
     // Initialization
     // -----------------------------------------------------------------------
 
+    xpcom_method!(set_auth_token => SetAuthToken(token: *const nsACString));
+    fn set_auth_token(&self, token: &nsACString) -> Result<(), nsresult> {
+        let token_str = token.to_utf8();
+        if let Ok(client) = self.client() {
+            client.set_auth_token(&token_str);
+        }
+        Ok(())
+    }
+
     xpcom_method!(initialize => Initialize(endpoint: *const nsACString));
     fn initialize(&self, endpoint: &nsACString) -> Result<(), nsresult> {
         let endpoint_str = endpoint.to_utf8();

@@ -24,6 +24,7 @@ pub struct JmapClient {
     http_client: Client,
     endpoint: Url,
     session: Mutex<Option<SessionData>>,
+    bearer_token: Mutex<Option<String>>,
 }
 
 /// Cached session information.
@@ -43,7 +44,25 @@ impl JmapClient {
             http_client,
             endpoint,
             session: Mutex::new(None),
+            bearer_token: Mutex::new(None),
         })
+    }
+
+    /// Set the OAuth2 bearer token for authentication.
+    /// This token is included as `Authorization: Bearer <token>` on all requests.
+    pub fn set_auth_token(&self, token: &str) {
+        let mut guard = self.bearer_token.lock().unwrap();
+        if token.is_empty() {
+            *guard = None;
+        } else {
+            *guard = Some(token.to_string());
+        }
+    }
+
+    /// Get the current bearer token for inline request building.
+    fn auth_val(&self) -> Option<String> {
+        self.bearer_token.lock().ok()
+            .and_then(|g| g.as_ref().map(|t| format!("Bearer {}", t)))
     }
 
     /// Discover the JMAP session by fetching /.well-known/jmap/session.
@@ -57,12 +76,19 @@ impl JmapClient {
         info!("JMAP: discovering session at {}", session_url_str);
 
         let session_url = Url::parse(&session_url_str)?;
-        let response = self
-            .http_client
-            .get(&session_url)?
-            .header("Accept", "application/json")
-            .send()
-            .await?;
+        let auth = self.auth_val();
+        let response = if let Some(ref val) = auth {
+            self.http_client
+                .get(&session_url)?
+                .header("Accept", "application/json")
+                .header("Authorization", val)
+                .send().await?
+        } else {
+            self.http_client
+                .get(&session_url)?
+                .header("Accept", "application/json")
+                .send().await?
+        };
 
         let body = std::str::from_utf8(response.body())?;
         info!("JMAP: session response {} bytes", body.len());
@@ -194,14 +220,23 @@ impl JmapClient {
         let json = serde_json::to_string(&body)?;
         info!("JMAP: POST to {} ({} bytes)", api_url, json.len());
 
-        let response = self
-            .http_client
-            .post(&api_url)?
-            .header("Content-Type", "application/json; charset=utf-8")
-            .header("Accept", "application/json")
-            .body(json.as_str(), "application/json; charset=utf-8")
-            .send()
-            .await?;
+        let auth = self.auth_val();
+        let response = if let Some(ref val) = auth {
+            self.http_client
+                .post(&api_url)?
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json")
+                .header("Authorization", val)
+                .body(json.as_str(), "application/json; charset=utf-8")
+                .send().await?
+        } else {
+            self.http_client
+                .post(&api_url)?
+                .header("Content-Type", "application/json; charset=utf-8")
+                .header("Accept", "application/json")
+                .body(json.as_str(), "application/json; charset=utf-8")
+                .send().await?
+        };
 
         let resp_body = std::str::from_utf8(response.body())?;
 
@@ -254,12 +289,19 @@ impl JmapClient {
             .replace("{name}", name);
 
         let url = Url::parse(&url_str)?;
-        let response = self
-            .http_client
-            .get(&url)?
-            .header("Accept", "message/rfc822, application/octet-stream")
-            .send()
-            .await?;
+        let auth = self.auth_val();
+        let response = if let Some(ref val) = auth {
+            self.http_client
+                .get(&url)?
+                .header("Accept", "message/rfc822, application/octet-stream")
+                .header("Authorization", val)
+                .send().await?
+        } else {
+            self.http_client
+                .get(&url)?
+                .header("Accept", "message/rfc822, application/octet-stream")
+                .send().await?
+        };
 
         Ok(response.body().to_vec())
     }
@@ -280,14 +322,23 @@ impl JmapClient {
             .replace("{accountId}", &session.account_id);
         let url = Url::parse(&url_str)?;
 
-        let response = self
-            .http_client
-            .post(&url)?
-            .header("Content-Type", content_type)
-            .header("Accept", "application/json")
-            .body(data, content_type)
-            .send()
-            .await?;
+        let auth = self.auth_val();
+        let response = if let Some(ref val) = auth {
+            self.http_client
+                .post(&url)?
+                .header("Content-Type", content_type)
+                .header("Accept", "application/json")
+                .header("Authorization", val)
+                .body(data, content_type)
+                .send().await?
+        } else {
+            self.http_client
+                .post(&url)?
+                .header("Content-Type", content_type)
+                .header("Accept", "application/json")
+                .body(data, content_type)
+                .send().await?
+        };
 
         let body = std::str::from_utf8(response.body())?;
         let result: UploadResult = serde_json::from_str(body)?;
@@ -311,3 +362,5 @@ fn is_response_type(type_: &str) -> bool {
             | "Blob/get"
     )
 }
+
+

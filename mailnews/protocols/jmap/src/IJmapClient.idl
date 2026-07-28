@@ -90,6 +90,16 @@ interface IJmapOperationListener : nsISupports
 interface IJmapClient : nsISupports
 {
   /**
+   * Sets the OAuth2 bearer token used for authentication.
+   * This token is included as `Authorization: Bearer <token>` on all
+   * subsequent HTTP requests to the JMAP server. Pass an empty string
+   * to clear the token.
+   *
+   * @param token - The OAuth2 bearer token (or empty to clear).
+   */
+  void setAuthToken(in AUTF8String token);
+
+  /**
    * Initializes the client with a JMAP endpoint URL.
    * This triggers session discovery asynchronously.
    *
