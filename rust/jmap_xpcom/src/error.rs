@@ -18,13 +18,6 @@ pub(crate) enum JmapError {
     #[error("invalid URL: {0}")]
     Url(#[from] url::ParseError),
 
-    #[error("JMAP request failed with error type `{type_}`: {detail}")]
-    RequestError {
-        type_: String,
-        status: u32,
-        detail: String,
-    },
-
     #[error("JMAP method `{method}` failed: {description}")]
     MethodError {
         method: String,
@@ -32,20 +25,11 @@ pub(crate) enum JmapError {
         description: String,
     },
 
-    #[error("state mismatch: server state has changed since our last sync")]
-    StateMismatch,
-
-    #[error("too many changes: delta sync not possible, full sync required")]
-    TooManyChanges,
-
     #[error("could not parse JMAP response as JSON: {0}")]
     Json(#[from] serde_json::Error),
 
     #[error("unexpected JMAP response: {0}")]
     UnexpectedResponse(String),
-
-    #[error("missing required field `{field}` in JMAP response")]
-    MissingField { field: String },
 
     #[error("session not initialized")]
     NotInitialized,
@@ -65,8 +49,6 @@ impl From<&JmapError> for nsresult {
         match value {
             JmapError::Protocol(err) => err.into(),
             JmapError::NotInitialized => nserror::NS_ERROR_NOT_INITIALIZED,
-            JmapError::StateMismatch => nserror::NS_ERROR_FAILURE,
-            JmapError::TooManyChanges => nserror::NS_ERROR_FAILURE,
             JmapError::AccountNotFound => nserror::NS_ERROR_FAILURE,
 
             _ => nserror::NS_ERROR_UNEXPECTED,
@@ -92,20 +74,9 @@ impl From<moz_http::Error> for JmapError {
     }
 }
 
-impl<'a> TryFrom<&'a JmapError> for &'a moz_http::Error {
-    type Error = ();
-
-    fn try_from(value: &'a JmapError) -> Result<Self, Self::Error> {
-        match value {
-            JmapError::Protocol(ProtocolError::Http(err)) => Ok(err),
-            _ => Err(()),
-        }
-    }
-}
-
 impl JmapError {
     /// Parse a JMAP "type" field from a method response error.
-    pub fn from_method_error(method: &str, args: &Value) -> Self {
+    pub(crate) fn from_method_error(method: &str, args: &Value) -> Self {
         let type_ = args
             .get("type")
             .and_then(|v| v.as_str())
@@ -119,13 +90,5 @@ impl JmapError {
             type_: type_.to_string(),
             description: description.to_string(),
         }
-    }
-
-    /// Check if this is a "stateMismatch" error.
-    pub fn is_state_mismatch(&self) -> bool {
-        matches!(
-            self,
-            JmapError::MethodError { type_, .. } if type_ == "stateMismatch"
-        )
     }
 }
