@@ -1,0 +1,49 @@
+# Build artifacts
+/obj/
+/dist/
+/MOZ_OBJDIR
+/Build/
+*.pyc
+*.o
+*.so
+*.dll
+*.dylib
+*.log
+
+# Mercurial
+.hg/
+.hgignore
+.hgsub
+.hgtags
+
+# Mozilla/comm-central source (tracked upstream, not here)
+mozilla/
+build/
+calendar/
+chat/
+docs/
+mail/
+mailnews/intl/
+python/
+suite/
+taskcluster/
+testing/
+third_party/
+tools/
+other-licenses/
+rust/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust target
+rust/target/
+*.mozbuild
