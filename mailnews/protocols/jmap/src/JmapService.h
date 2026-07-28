@@ -5,20 +5,15 @@
 #ifndef COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPSERVICE_H_
 #define COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPSERVICE_H_
 
-#include "nsIMsgMessageService.h"
+#include "nsISupports.h"
 
-/**
- * JmapService implements nsIMsgMessageService to provide message
- * access for JMAP accounts.
- */
-class JmapService : public nsIMsgMessageService {
+class JmapService : public nsISupports {
  public:
   NS_DECL_ISUPPORTS
-  NS_DECL_NSIMSGMESSAGESERVICE
 
   JmapService();
 
- protected:
+ private:
   virtual ~JmapService();
 };
 

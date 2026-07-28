@@ -2,14 +2,22 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::fmt;
+//! JMAP error values.
 
-use nserror::{nsresult, NS_ERROR_FAILURE, NS_ERROR_UNEXPECTED};
+use nserror::nsresult;
+use protocol_shared::error::ProtocolError;
 use serde_json::Value;
+use thiserror::Error;
 
-/// Errors that can occur during JMAP operations.
-#[derive(Debug, thiserror::Error)]
-pub enum JmapError {
+/// Error types for JMAP operations.
+#[derive(Debug, Error)]
+pub(crate) enum JmapError {
+    #[error(transparent)]
+    Protocol(#[from] ProtocolError),
+
+    #[error("invalid URL: {0}")]
+    Url(#[from] url::ParseError),
+
     #[error("JMAP request failed with error type `{type_}`: {detail}")]
     RequestError {
         type_: String,
@@ -31,10 +39,7 @@ pub enum JmapError {
     TooManyChanges,
 
     #[error("could not parse JMAP response as JSON: {0}")]
-    JsonParse(#[from] serde_json::Error),
-
-    #[error("could not parse JMAP response at path: {0}")]
-    JsonPathParse(#[from] serde_path_to_error::Error<serde_json::Error>),
+    Json(#[from] serde_json::Error),
 
     #[error("unexpected JMAP response: {0}")]
     UnexpectedResponse(String),
@@ -42,32 +47,60 @@ pub enum JmapError {
     #[error("missing required field `{field}` in JMAP response")]
     MissingField { field: String },
 
-    #[error("missing ID in response")]
-    MissingIdInResponse,
-
-    #[error("HTTP error: {0}")]
-    Http(#[from] moz_http::Error),
-
-    #[error("invalid URL: {0}")]
-    InvalidUrl(#[from] url::ParseError),
-
     #[error("session not initialized")]
     NotInitialized,
 
     #[error("account not found")]
     AccountNotFound,
 
-    #[error("JMAP capability not supported: {0}")]
-    CapabilityNotSupported(String),
+    #[error("UTF-8 error: {0}")]
+    Utf8(#[from] std::str::Utf8Error),
 
-    #[error("transport security failure: {status}")]
-    TransportSecurityFailure { status: nsresult },
-
-    #[error("XPCOM operation failure: {0}")]
-    XpComFailure(String),
-
-    #[error("{0}")]
+    #[error("error in processing: {0}")]
     Processing(String),
+}
+
+impl From<&JmapError> for nsresult {
+    fn from(value: &JmapError) -> Self {
+        match value {
+            JmapError::Protocol(err) => err.into(),
+            JmapError::NotInitialized => nserror::NS_ERROR_NOT_INITIALIZED,
+            JmapError::StateMismatch => nserror::NS_ERROR_FAILURE,
+            JmapError::TooManyChanges => nserror::NS_ERROR_FAILURE,
+            JmapError::AccountNotFound => nserror::NS_ERROR_FAILURE,
+
+            _ => nserror::NS_ERROR_UNEXPECTED,
+        }
+    }
+}
+
+impl From<JmapError> for nsresult {
+    fn from(value: JmapError) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<nsresult> for JmapError {
+    fn from(value: nsresult) -> Self {
+        JmapError::Protocol(ProtocolError::XpCom(value))
+    }
+}
+
+impl From<moz_http::Error> for JmapError {
+    fn from(value: moz_http::Error) -> Self {
+        JmapError::Protocol(ProtocolError::Http(value))
+    }
+}
+
+impl<'a> TryFrom<&'a JmapError> for &'a moz_http::Error {
+    type Error = ();
+
+    fn try_from(value: &'a JmapError) -> Result<Self, Self::Error> {
+        match value {
+            JmapError::Protocol(ProtocolError::Http(err)) => Ok(err),
+            _ => Err(()),
+        }
+    }
 }
 
 impl JmapError {
@@ -95,40 +128,4 @@ impl JmapError {
             JmapError::MethodError { type_, .. } if type_ == "stateMismatch"
         )
     }
-}
-
-impl From<JmapError> for nsresult {
-    fn from(err: JmapError) -> nsresult {
-        match err {
-            JmapError::NotInitialized => NS_ERROR_UNEXPECTED,
-            JmapError::AccountNotFound => NS_ERROR_FAILURE,
-            JmapError::StateMismatch => NS_ERROR_FAILURE,
-            JmapError::TooManyChanges => NS_ERROR_FAILURE,
-            JmapError::Http(e) => e.into(),
-            JmapError::TransportSecurityFailure { status } => status,
-            _ => NS_ERROR_FAILURE,
-        }
-    }
-}
-
-impl From<nsresult> for JmapError {
-    fn from(rv: nsresult) -> JmapError {
-        JmapError::XpComFailure(format!("nsresult: {rv}"))
-    }
-}
-
-impl fmt::Display for nsresult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "nsresult({})", self.0)
-    }
-}
-
-/// Helper to extract the JMAP error type from method response arguments.
-pub fn get_error_type(args: &Value) -> Option<&str> {
-    args.get("type").and_then(|v| v.as_str())
-}
-
-/// Check if a method response indicates an error.
-pub fn is_method_error(args: &Value) -> bool {
-    matches!(get_error_type(args), Some(t) if t != "success")
 }

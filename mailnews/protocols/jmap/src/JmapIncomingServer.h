@@ -7,76 +7,25 @@
 
 #include "IJmapIncomingServer.h"
 #include "nsMsgIncomingServer.h"
+#include "nsString.h"
 
-#define JMAP_INCOMING_SERVER_IID                          \
-  {                                                        \
-    0xabcdef01, 0x2345, 0x6789, {                          \
-      0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89     \
-    }                                                      \
-  }
-
+/**
+ * JMAP incoming server implementation.
+ */
 class JmapIncomingServer : public nsMsgIncomingServer,
                            public IJmapIncomingServer {
  public:
-  NS_DECL_ISUPPORTS_INHERITED
   NS_DECL_IJMAPINCOMINGSERVER
+  NS_DECL_ISUPPORTS_INHERITED
 
   JmapIncomingServer();
-
-  NS_INLINE_DECL_STATIC_IID(JMAP_INCOMING_SERVER_IID)
 
  protected:
   virtual ~JmapIncomingServer();
 
-  /**
-   * Creates a local folder with the given JMAP properties.
-   */
-  nsresult MaybeCreateFolderWithDetails(const nsACString& id,
-                                        const nsACString& parentId,
-                                        const nsACString& name,
-                                        const nsACString& role,
-                                        uint32_t flags);
-
-  nsresult DeleteFolderWithId(const nsACString& id);
-
-  nsresult UpdateFolderWithDetails(const nsACString& id,
-                                   const nsACString& parentId,
-                                   const nsACString& name,
-                                   const nsACString& role,
-                                   nsIMsgWindow* msgWindow);
-
-  // nsIMsgIncomingServer overrides
-  NS_IMETHOD GetPassword(nsAString& password) override;
-  NS_IMETHOD GetPort(int32_t* aPort) override;
-  NS_IMETHOD GetLocalStoreType(nsACString& aLocalStoreType) override;
-  NS_IMETHOD GetLocalDatabaseType(nsACString& aLocalDatabaseType) override;
-  NS_IMETHOD GetCanBeDefaultServer(bool* canBeDefaultServer) override;
-  NS_IMETHOD GetOfflineSupportLevel(int32_t* aSupportLevel) override;
-  NS_IMETHOD GetNewMessages(nsIMsgFolder* aFolder, nsIMsgWindow* aMsgWindow,
-                            nsIUrlListener* aUrlListener) override;
-  NS_IMETHOD PerformBiff(nsIMsgWindow* aMsgWindow) override;
-  NS_IMETHOD PerformExpand(nsIMsgWindow* aMsgWindow) override;
-  NS_IMETHOD Shutdown() override;
-  NS_IMETHOD VerifyLogon(nsIUrlListener* aUrlListener, nsIMsgWindow* aMsgWindow,
-                         nsIURI** _retval) override;
-  NS_IMETHOD GetCanSearchMessages(bool* canSearchMessages) override;
-
  private:
-  nsresult FindFolderWithId(const nsACString& id, nsIMsgFolder** _retval);
-
-  nsresult SyncFolderList(nsIMsgWindow* aMsgWindow,
-                          std::function<nsresult()> postSyncCallback);
-
-  nsresult SyncFolders(const nsTArray<RefPtr<nsIMsgFolder>>& folders,
-                       nsIMsgWindow* aMsgWindow, nsIUrlListener* urlListener);
-
-  nsresult SyncAllFolders(nsIMsgWindow* aMsgWindow,
-                          nsIUrlListener* urlListener);
-
-  nsresult UpdateTrashFolder();
-
-  // The JMAP protocol client (lazily created and reused).
-  nsCOMPtr<IJmapClient> mClient;
+  nsCString mJmapUrl;
+  nsCString mJmapAccountId;
 };
 
 #endif  // COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPINCOMINGSERVER_H_

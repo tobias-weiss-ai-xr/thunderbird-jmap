@@ -2,688 +2,585 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-//! Core JMAP data types defined by RFC 8620 (JMAP Core) and RFC 8621 (JMAP Mail).
+//! JMAP data types as defined in RFC 8620 and RFC 8621.
 //!
-//! All types use serde for JSON serialization/deserialization. These map
-//! directly to the JMAP JSON structures.
-
-use std::collections::HashMap;
+//! All types use serde for JSON serialization/deserialization.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use time::OffsetDateTime;
 
 // ---------------------------------------------------------------------------
-// RFC 8620 §2 — Session
+// Core JMAP types (RFC 8620)
 // ---------------------------------------------------------------------------
 
-/// A JMAP Session resource, returned by GET to the session URL.
-///
-/// ```json
-/// {
-///   "capabilities": { ... },
-///   "accounts": { ... },
-///   "primaryAccounts": { ... },
-///   "urls": { ... },
-///   ...
-/// }
-/// ```
+/// A JMAP request envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Session {
-    #[serde(default)]
-    pub capabilities: HashMap<String, serde_json::Value>,
-
-    pub accounts: HashMap<String, Account>,
-
-    #[serde(default)]
-    pub primary_accounts: HashMap<String, String>,
-
-    pub urls: SessionUrls,
-
-    #[serde(default)]
-    pub download_url: Option<String>,
-
-    #[serde(default)]
-    pub upload_url: Option<String>,
-
-    #[serde(default)]
-    pub event_source_url: Option<String>,
-
-    #[serde(default)]
-    pub max_concurrent_upload: Option<u32>,
-
-    #[serde(default)]
-    pub max_concurrent_requests: Option<u32>,
-
-    #[serde(default)]
-    pub max_size_upload: Option<u64>,
-
-    #[serde(default)]
-    pub max_requests_in_batch: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
-    pub name: String,
-
-    #[serde(default)]
-    pub is_personal: Option<bool>,
-
-    #[serde(default)]
-    pub is_read_only: Option<bool>,
-
-    #[serde(default)]
-    pub account_capabilities: HashMap<String, serde_json::Value>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionUrls {
-    #[serde(rename = "apiUrl")]
-    pub api_url: Option<String>,
-}
-
-// ---------------------------------------------------------------------------
-// RFC 8620 §3.2 — Request / Response
-// ---------------------------------------------------------------------------
-
-/// A JMAP API Request.
-///
-/// ```json
-/// [
-///   ["using", ["urn:ietf:params:jmap:mail", ...]],
-///   [ [ "Mailbox/get", {...}, "c1" ], [ "Email/query", {...}, "c2" ] ]
-/// ]
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Request {
-    #[serde(rename = "using")]
+pub struct JmapRequest {
     pub using: Vec<String>,
-
-    pub method_calls: Vec<MethodCall>,
+    pub method_calls: Vec<JmapMethodCall>,
 }
 
+/// A single JMAP method call: `[method, args, callId]`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MethodCall {
-    /// e.g. "Mailbox/get", "Email/changes"
-    pub name: String,
-
-    /// Method-specific arguments as a JSON object
-    #[serde(rename = "arguments")]
-    pub arguments: serde_json::Value,
-
-    /// Client-generated call ID for referencing responses
-    #[serde(rename = "callId")]
+pub struct JmapMethodCall {
+    // Serialized as a JSON array of 3 elements
+    pub method: String,
+    pub args: serde_json::Value,
     pub call_id: String,
 }
 
-impl MethodCall {
-    pub fn new(name: &str, arguments: serde_json::Value, call_id: &str) -> Self {
+impl JmapMethodCall {
+    pub fn new(method: &str, args: serde_json::Value, call_id: &str) -> Self {
         Self {
-            name: name.to_string(),
-            arguments,
+            method: method.to_string(),
+            args,
             call_id: call_id.to_string(),
         }
     }
 }
 
-/// A JMAP API Response.
-///
-/// ```json
-/// [
-///   "urn:ietf:params:jmap:mail",
-///   [ [ "Mailbox/get", {...}, "c1" ], ... ],
-///   [ { "type": "unknownMethod", ... }, ... ]
-/// ]
-/// ```
+/// A JMAP response envelope.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Response {
-    #[serde(rename = "using")]
-    pub using: Vec<String>,
-
-    pub method_responses: Vec<MethodResponse>,
+pub struct JmapResponse {
+    pub method_responses: Vec<JmapMethodResponse>,
 }
 
+/// A single JMAP method response: `[method, args, callId]`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MethodResponse {
-    /// e.g. "Mailbox/get", "Email/changes"
-    pub name: String,
-
-    /// Method-specific response as JSON value
-    #[serde(rename = "arguments")]
-    pub arguments: serde_json::Value,
-
-    /// Matches the request callId
-    #[serde(rename = "callId")]
+pub struct JmapMethodResponse {
+    pub method: String,
+    pub args: serde_json::Value,
     pub call_id: String,
 }
 
 // ---------------------------------------------------------------------------
-// RFC 8620 §3.6 — Problem Details
+// Session object (RFC 8620)
 // ---------------------------------------------------------------------------
 
-/// JMAP-specific problem details returned on errors.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProblemDetails {
-    #[serde(rename = "type")]
-    pub error_type: String,
-
+/// JMAP Session resource.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Session {
+    pub capabilities: serde_json::Value,
+    pub accounts: HashMap<String, Account>,
     #[serde(default)]
-    pub title: Option<String>,
-
+    pub primary_accounts: HashMap<String, String>,
+    pub username: String,
     #[serde(default)]
-    pub status: Option<u32>,
-
+    pub api_url: Option<String>,
     #[serde(default)]
-    pub detail: Option<String>,
-
+    pub download_url: Option<String>,
     #[serde(default)]
-    pub method_calls: Vec<serde_json::Value>,
+    pub upload_url: Option<String>,
+    #[serde(default)]
+    pub event_source_url: Option<String>,
+    #[serde(default)]
+    pub state: Option<String>,
+}
+
+/// A JMAP account.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Account {
+    pub name: String,
+    pub is_personal: bool,
+    pub is_read_only: bool,
+    pub account_capabilities: serde_json::Value,
 }
 
 // ---------------------------------------------------------------------------
-// RFC 8621 §2 — Mailbox
+// Mailbox types (RFC 8621 §2)
 // ---------------------------------------------------------------------------
 
-/// A JMAP Mailbox object (RFC 8621 §2).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A JMAP Mailbox.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Mailbox {
     pub id: String,
-
+    #[serde(default)]
     pub name: String,
-
     #[serde(default)]
     pub parent_id: Option<String>,
-
     #[serde(default)]
     pub role: Option<String>,
-
     #[serde(default)]
-    pub sort_order: Option<u32>,
-
+    pub sort_order: u32,
     #[serde(default)]
-    pub total_emails: Option<u64>,
-
+    pub total_emails: u32,
     #[serde(default)]
-    pub unread_emails: Option<u64>,
-
+    pub unread_emails: u32,
     #[serde(default)]
-    pub total_threads: Option<u64>,
-
+    pub total_threads: u32,
     #[serde(default)]
-    pub unread_threads: Option<u64>,
-
+    pub unread_threads: u32,
     #[serde(default)]
-    pub my_rights: Option<MailboxRights>,
-
+    pub my_rights: MyRights,
     #[serde(default)]
-    pub is_subscribed: Option<bool>,
-
-    #[serde(default)]
-    pub quarantine: Option<bool>,
-
-    #[serde(rename = "x-stalwart-jmap quotas", default)]
-    pub stalwart_jmap_quotas: Option<serde_json::Value>,
-
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub is_subscribed: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MailboxRights {
+/// Rights the user has on a Mailbox.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MyRights {
     #[serde(default)]
-    pub may_read_items: Option<bool>,
-
+    pub may_read_items: bool,
     #[serde(default)]
-    pub may_add_items: Option<bool>,
-
+    pub may_add_items: bool,
     #[serde(default)]
-    pub may_remove_items: Option<bool>,
-
+    pub may_remove_items: bool,
     #[serde(default)]
-    pub may_set_seen: Option<bool>,
-
+    pub may_set_seen: bool,
     #[serde(default)]
-    pub may_set_keywords: Option<bool>,
-
+    pub may_set_keywords: bool,
     #[serde(default)]
-    pub may_create_child: Option<bool>,
-
+    pub may_create_child: bool,
     #[serde(default)]
-    pub may_rename: Option<bool>,
-
+    pub may_rename: bool,
     #[serde(default)]
-    pub may_delete: Option<bool>,
-
+    pub may_delete: bool,
     #[serde(default)]
-    pub may_submit: Option<bool>,
+    pub may_submit: bool,
 }
 
 // ---------------------------------------------------------------------------
-// RFC 8621 §4 — Email
+// Email types (RFC 8621 §4)
 // ---------------------------------------------------------------------------
 
-/// A JMAP Email object (RFC 8621 §4).
+/// A JMAP Email.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Email {
     pub id: String,
-
     #[serde(default)]
     pub blob_id: Option<String>,
-
     #[serde(default)]
     pub thread_id: Option<String>,
-
     #[serde(default)]
     pub mailbox_ids: HashMap<String, bool>,
-
     #[serde(default)]
-    pub keywords: HashSet,
-
+    pub keywords: JmapKeywords,
     #[serde(default)]
     pub size: Option<u64>,
-
-    #[serde(default)]
-    pub received_at: Option<String>,
-
     #[serde(default)]
     pub message_id: Option<Option<String>>,
-
     #[serde(default)]
     pub in_reply_to: Option<Option<String>>,
-
     #[serde(default)]
-    pub references: Option<Option<String>>,
-
+    pub references: Option<Vec<String>>,
     #[serde(default)]
     pub sender: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub from: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub to: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub cc: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub bcc: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub reply_to: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub subject: Option<Option<String>>,
-
     #[serde(default)]
-    pub sent_at: Option<String>,
-
+    pub sent_at: Option<OffsetDateTime>,
+    #[serde(default)]
+    pub received_at: Option<OffsetDateTime>,
     #[serde(default)]
     pub preview: Option<String>,
-
     #[serde(default)]
     pub has_attachment: Option<bool>,
-
     #[serde(default)]
     pub headers: Option<Vec<Header>>,
-
     #[serde(default)]
     pub body_structure: Option<BodyStructure>,
-
+    #[serde(default)]
+    pub body_values: Option<HashMap<String, BodyValue>>,
     #[serde(default)]
     pub text_body: Option<Vec<BodyPart>>,
-
     #[serde(default)]
     pub html_body: Option<Vec<BodyPart>>,
-
-    #[serde(default)]
-    pub attachments: Option<Vec<BodyPart>>,
-
-    #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
 }
 
-/// JMAP keywords (RFC 8621 §4.4).
-///
-/// Special keywords: $draft, $seen, $flagged, $answered, $forwarded,
-/// $junk, $notjunk, $phishing, $recent, $important
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-#[serde(transparent)]
-pub struct HashSet {
-    #[serde(default)]
-    pub values: std::collections::HashSet<String>,
-}
-
-impl HashSet {
-    pub fn new(values: Vec<&str>) -> Self {
-        Self {
-            values: values.into_iter().map(String::from).collect(),
-        }
-    }
-
-    pub fn contains(&self, keyword: &str) -> bool {
-        self.values.contains(keyword)
-    }
-
-    pub fn is_seen(&self) -> bool {
-        self.contains("$seen")
-    }
-
-    pub fn is_flagged(&self) -> bool {
-        self.contains("$flagged")
-    }
-
-    pub fn is_draft(&self) -> bool {
-        self.contains("$draft")
-    }
-
-    pub fn is_junk(&self) -> bool {
-        self.contains("$junk")
-    }
-}
-
+/// An email address.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailAddress {
-    pub name: Option<String>,
     pub email: String,
+    pub name: Option<String>,
 }
 
+/// An email header.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Header {
     pub name: String,
     pub value: String,
 }
 
+/// JMAP keywords (special: `$seen`, `$flagged`, `$answered`, `$draft`, `$forwarded`, `$phishing`, `$junk`, `$notjunk`, `$important`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct JmapKeywords {
+    #[serde(default)]
+    seen: bool,
+    #[serde(default)]
+    flagged: bool,
+    #[serde(default)]
+    answered: bool,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    forwarded: bool,
+    #[serde(default)]
+    phishing: bool,
+    #[serde(default)]
+    junk: bool,
+    #[serde(default)]
+    notjunk: bool,
+    #[serde(default)]
+    important: bool,
+}
+
+impl JmapKeywords {
+    pub fn is_seen(&self) -> bool {
+        self.seen
+    }
+
+    pub fn is_flagged(&self) -> bool {
+        self.flagged
+    }
+
+    pub fn is_draft(&self) -> bool {
+        self.draft
+    }
+
+    pub fn set_seen(&mut self, seen: bool) {
+        self.seen = seen;
+    }
+
+    pub fn set_flagged(&mut self, flagged: bool) {
+        self.flagged = flagged;
+    }
+}
+
+/// A reference to a body part.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BodyPart {
     pub part_id: String,
-
-    #[serde(default)]
     pub blob_id: Option<String>,
-
-    #[serde(default)]
     pub size: Option<u64>,
-
-    #[serde(default)]
-    pub headers: Option<Vec<Header>>,
-
-    #[serde(default)]
-    pub type_: Option<String>,
-
-    #[serde(default)]
+    #[serde(rename = "type")]
+    pub content_type: Option<String>,
     pub charset: Option<String>,
-
     #[serde(default)]
     pub disposition: Option<String>,
-
     #[serde(default)]
     pub cid: Option<String>,
-
     #[serde(default)]
-    pub language: Option<String>,
-
+    pub language: Option<Vec<String>>,
     #[serde(default)]
     pub location: Option<String>,
-
     #[serde(default)]
-    pub sub_parts: Option<Vec<BodyPart>>,
+    pub headers: Option<Vec<Header>>,
 }
 
+/// Body structure (recursive).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BodyStructure {
     #[serde(rename = "type")]
-    pub type_: String,
-    pub sub_type: String,
-
+    pub content_type: String,
     #[serde(default)]
-    pub parts: Option<Vec<BodyPart>>,
-
+    pub subtype: Option<String>,
     #[serde(default)]
-    pub body_parts: Option<BodyPart>,
-
+    pub parts: Option<Vec<BodyStructure>>,
+    #[serde(default)]
+    pub part_id: Option<String>,
     #[serde(default)]
     pub blob_id: Option<String>,
-
     #[serde(default)]
     pub size: Option<u64>,
-
     #[serde(default)]
     pub headers: Option<Vec<Header>>,
-
     #[serde(default)]
-    pub disposition: Option<String>,
-
-    #[serde(default)]
-    pub language: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub location: Option<String>,
-
+    pub name: Option<String>,
     #[serde(default)]
     pub charset: Option<String>,
-
+    #[serde(default)]
+    pub disposition: Option<String>,
     #[serde(default)]
     pub cid: Option<String>,
+    #[serde(default)]
+    pub language: Option<Vec<String>>,
+    #[serde(default)]
+    pub location: Option<String>,
 }
 
-// ---------------------------------------------------------------------------
-// RFC 8621 §5 — EmailSubmission
-// ---------------------------------------------------------------------------
-
+/// A fetched body value.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmailSubmission {
-    pub id: String,
-
-    #[serde(default)]
-    pub identity_id: Option<String>,
-
-    #[serde(default)]
-    pub email_id: Option<String>,
-
-    #[serde(default)]
-    pub thread_id: Option<String>,
-
-    #[serde(default)]
-    pub envelope: Option<Envelope>,
-
-    #[serde(default)]
-    pub send_at: Option<String>,
-
-    #[serde(default)]
-    pub undo_status: Option<String>,
-
-    #[serde(default)]
-    pub dsn_algorithm: Option<String>,
-
-    #[serde(default)]
-    pub mdn_algorithm: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Envelope {
-    #[serde(default)]
-    pub mail_from: Option<EmailAddress>,
-
-    #[serde(default)]
-    pub rcpt_to: Vec<EmailAddress>,
+pub struct BodyValue {
+    pub value: String,
+    pub is_encoding_problem: Option<bool>,
+    pub is_truncated: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
-// RFC 8621 §7 — Identity
+// Identity types (RFC 8621 §7)
 // ---------------------------------------------------------------------------
 
+/// A JMAP Identity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Identity {
     pub id: String,
-
     #[serde(default)]
     pub name: Option<String>,
-
     #[serde(default)]
     pub email: Option<String>,
-
     #[serde(default)]
     pub reply_to: Option<Vec<EmailAddress>>,
-
     #[serde(default)]
     pub bcc: Option<Vec<EmailAddress>>,
-
-    #[serde(default)]
-    pub html_signature: Option<String>,
-
     #[serde(default)]
     pub text_signature: Option<String>,
+    #[serde(default)]
+    pub html_signature: Option<String>,
+    #[serde(default)]
+    pub may_delete: bool,
 }
 
 // ---------------------------------------------------------------------------
-// Method arguments / response shapes
+// Method argument/response types
 // ---------------------------------------------------------------------------
 
-/// Response for Mailbox/get, Mailbox/changes, etc.
+/// Request args for `Mailbox/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetResponse<T> {
+pub struct MailboxGetRequest {
     #[serde(default)]
-    pub account_id: Option<String>,
-
-    #[serde(default)]
-    pub state: Option<String>,
-
-    #[serde(default)]
-    pub list: Vec<T>,
-
-    #[serde(default)]
-    pub not_found: Option<Vec<String>>,
+    pub account_id: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<String>,
 }
 
-/// Response for * /changes
+/// Response args for `Mailbox/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChangesResponse {
+pub struct MailboxGetResponse {
+    pub account_id: String,
+    pub state: String,
+    pub list: Vec<Mailbox>,
     #[serde(default)]
-    pub account_id: Option<String>,
-
-    #[serde(default)]
-    pub old_state: Option<String>,
-
-    #[serde(default)]
-    pub new_state: Option<String>,
-
-    #[serde(default)]
-    pub has_more_changes: Option<bool>,
-
-    #[serde(default)]
-    pub created: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub updated: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub destroyed: Option<Vec<String>>,
+    pub not_found: Vec<String>,
 }
 
-/// Response for * /set
+/// Request args for `Email/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetResponse<T> {
+pub struct EmailGetRequest {
     #[serde(default)]
-    pub account_id: Option<String>,
-
+    pub account_id: String,
+    pub ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub properties: Vec<String>,
     #[serde(default)]
-    pub old_state: Option<String>,
-
+    pub body_properties: Option<Vec<String>>,
     #[serde(default)]
-    pub new_state: Option<String>,
-
+    pub fetch_text_body_values: Option<bool>,
     #[serde(default)]
-    pub created: Option<HashMap<String, T>>,
-
+    pub fetch_html_body_values: Option<bool>,
     #[serde(default)]
-    pub updated: Option<HashMap<String, Option<serde_json::Value>>>,
-
+    pub fetch_all_body_values: Option<bool>,
     #[serde(default)]
-    pub destroyed: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub not_created: Option<HashMap<String, serde_json::Value>>,
-
-    #[serde(default)]
-    pub not_updated: Option<HashMap<String, serde_json::Value>>,
-
-    #[serde(default)]
-    pub not_destroyed: Option<HashMap<String, serde_json::Value>>,
+    pub max_body_value_bytes: Option<u64>,
 }
 
-/// Response for * /query
+/// Response args for `Email/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct QueryResponse {
+pub struct EmailGetResponse {
+    pub account_id: String,
+    pub state: String,
+    pub list: Vec<Email>,
     #[serde(default)]
-    pub account_id: Option<String>,
+    pub not_found: Vec<String>,
+}
 
+/// Request args for `Email/query`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailQueryRequest {
+    pub account_id: String,
     #[serde(default)]
-    pub query_state: Option<String>,
-
+    pub filter: Option<serde_json::Value>,
     #[serde(default)]
-    pub can_calculate_changes: Option<bool>,
-
+    pub sort: Option<Vec<SortComparator>>,
+    #[serde(default)]
+    pub collapse_threads: Option<bool>,
     #[serde(default)]
     pub position: Option<u32>,
-
     #[serde(default)]
-    pub ids: Vec<String>,
-
+    pub anchor: Option<String>,
     #[serde(default)]
-    pub total: Option<u32>,
-
+    pub anchor_offset: Option<u32>,
     #[serde(default)]
     pub limit: Option<u32>,
 }
 
-/// Response for Email/copy
+/// A sort comparator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CopyResponse {
+pub struct SortComparator {
+    pub property: String,
     #[serde(default)]
-    pub account_id: Option<String>,
-
+    pub is_ascending: Option<bool>,
+    #[serde(rename = "collation")]
     #[serde(default)]
-    pub from_account_id: Option<String>,
+    pub collation: Option<String>,
+}
 
+/// Response args for `Email/query`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailQueryResponse {
+    pub account_id: String,
+    pub query_state: String,
+    pub can_collapse_changes: bool,
+    pub position: u32,
+    pub ids: Vec<String>,
+}
+
+/// Request args for `Email/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailSetRequest {
+    pub account_id: String,
+    #[serde(default)]
+    pub if_in_state: Option<String>,
+    #[serde(default)]
+    pub create: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub update: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub destroy: Option<Vec<String>>,
+}
+
+/// Response args for `Email/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailSetResponse {
+    pub account_id: String,
     #[serde(default)]
     pub old_state: Option<String>,
-
     #[serde(default)]
     pub new_state: Option<String>,
-
     #[serde(default)]
-    pub created: Option<HashMap<String, Email>>,
+    pub created: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub updated: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub destroyed: Option<Vec<String>>,
+    #[serde(default)]
+    pub not_created: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub not_updated: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub not_destroyed: Option<HashMap<String, serde_json::Value>>,
+}
 
+/// Request args for `Email/copy`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailCopyRequest {
+    pub account_id: String,
+    #[serde(default)]
+    pub if_from_in_state: Option<String>,
+    #[serde(default)]
+    pub create: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Response args for `Email/copy`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailCopyResponse {
+    pub account_id: String,
+    #[serde(default)]
+    pub from_state: Option<String>,
+    #[serde(default)]
+    pub new_state: Option<String>,
+    #[serde(default)]
+    pub created: Option<HashMap<String, serde_json::Value>>,
     #[serde(default)]
     pub not_created: Option<HashMap<String, serde_json::Value>>,
 }
 
-/// Response for Email/import
+/// Request args for `Mailbox/set`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImportResponse {
+pub struct MailboxSetRequest {
+    pub account_id: String,
     #[serde(default)]
-    pub account_id: Option<String>,
+    pub if_in_state: Option<String>,
+    #[serde(default)]
+    pub create: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub update: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub destroy: Option<Vec<String>>,
+}
 
+/// Response args for `Mailbox/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MailboxSetResponse {
+    pub account_id: String,
     #[serde(default)]
     pub old_state: Option<String>,
-
     #[serde(default)]
     pub new_state: Option<String>,
-
     #[serde(default)]
-    pub created: Option<HashMap<String, Email>>,
+    pub created: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub updated: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub destroyed: Option<Vec<String>>,
+    #[serde(default)]
+    pub not_created: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub not_updated: Option<HashMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub not_destroyed: Option<HashMap<String, serde_json::Value>>,
+}
 
+/// Request args for `EmailSubmission/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailSubmissionSetRequest {
+    pub account_id: String,
+    #[serde(default)]
+    pub if_in_state: Option<String>,
+    #[serde(default)]
+    pub create: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Response args for `EmailSubmission/set`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EmailSubmissionSetResponse {
+    pub account_id: String,
+    #[serde(default)]
+    pub old_state: Option<String>,
+    #[serde(default)]
+    pub new_state: Option<String>,
+    #[serde(default)]
+    pub created: Option<HashMap<String, serde_json::Value>>,
     #[serde(default)]
     pub not_created: Option<HashMap<String, serde_json::Value>>,
 }
 
-// ---------------------------------------------------------------------------
-// RFC 8620 §6 — Push (EventSource)
-// ---------------------------------------------------------------------------
-
+/// Request args for `Identity/get`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PushStateChange {
+pub struct IdentityGetRequest {
+    pub account_id: String,
     #[serde(default)]
-    pub changed: Vec<HashMap<String, String>>,
+    pub ids: Vec<String>,
+}
 
+/// Response args for `Identity/get`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityGetResponse {
+    pub account_id: String,
+    pub state: String,
+    pub list: Vec<Identity>,
     #[serde(default)]
-    pub source: Option<String>,
+    pub not_found: Vec<String>,
+}
+
+/// Response from blob upload.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadResult {
+    pub account_id: String,
+    pub blob_id: String,
+    pub size: u64,
+    #[serde(rename = "type")]
+    pub content_type: String,
 }

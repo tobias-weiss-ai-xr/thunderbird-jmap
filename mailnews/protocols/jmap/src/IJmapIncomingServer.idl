@@ -4,69 +4,15 @@
 
 #include "nsISupports.idl"
 
-interface IJmapClient;
-interface IJmapSimpleOperationListener;
-interface nsIMsgFolder;
-interface nsIMsgWindow;
-
 /**
- * IJmapIncomingServer provides JMAP-specific server attributes and operations.
- *
- * Similar to IExchangeIncomingServer, this interface provides access to the
- * JMAP protocol client and JMAP-specific server configuration.
+ * JMAP-specific incoming server interface.
  */
 [scriptable, uuid(12345678-90ab-cdef-1234-567890abcdef)]
 interface IJmapIncomingServer : nsISupports
 {
-  /**
-   * Whether the JMAP protocol client is currently running.
-   */
-  readonly attribute boolean protocolClientRunning;
+  /** The URL for the JMAP server. */
+  attribute ACString jmapUrl;
 
-  /**
-   * Whether the protocol client is currently idle.
-   */
-  readonly attribute boolean protocolClientIdle;
-
-  /**
-   * Get the JMAP client for interacting with the server, creating one
-   * if necessary.
-   */
-  IJmapClient getProtocolClient();
-
-  /**
-   * Retrieve the trash mailbox using the role stored in the account's prefs.
-   */
-  readonly attribute nsIMsgFolder trashFolder;
-
-  /** The URL for the JMAP server session endpoint. */
-  attribute AUTF8String jmapUrl;
-
-  /** The JMAP account ID (discovered during session initialization). */
-  attribute AUTF8String jmapAccountId;
-
-  /**
-   * Perform a full mailbox hierarchy sync.
-   *
-   * @param listener - Notified when sync completes.
-   * @param window - Message window context.
-   */
-  void syncMailboxHierarchy(in IJmapSimpleOperationListener listener,
-                             in nsIMsgWindow window);
-
-  /**
-   * An enumeration of what to do when deleting an item.
-   */
-  cenum DeleteModel : 8 {
-    PERMANENTLY_DELETE,
-    MOVE_TO_TRASH,
-  };
-
-  /** The action to take upon message delete. */
-  attribute IJmapIncomingServer_DeleteModel deleteModel;
-
-  /**
-   * Whether to use EventSource (JMAP Push) for real-time notifications.
-   */
-  attribute boolean pushEnabled;
+  /** The JMAP account ID. */
+  attribute ACString jmapAccountId;
 };

@@ -14,7 +14,7 @@ class JmapProtocolInfo : public nsIMsgProtocolInfo {
 
   JmapProtocolInfo();
 
- protected:
+ private:
   virtual ~JmapProtocolInfo();
 };
 

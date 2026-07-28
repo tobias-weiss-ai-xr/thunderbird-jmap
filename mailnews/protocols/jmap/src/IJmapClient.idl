@@ -3,27 +3,18 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
-#include "nsIArray.idl"
+#include "nsIURI.idl"
 #include "MailNewsTypes2.idl"
 
-interface nsIMsgDBHdr;
-interface nsIInputStream;
 interface nsIMsgIncomingServer;
 interface nsIUrlListener;
-
-// Forward declarations of callback interfaces.
-interface IJmapFolderListener;
-interface IJmapMessageSyncListener;
-interface IJmapMessageCreateListener;
-interface IJmapMessageFetchListener;
-interface IJmapSimpleOperationListener;
+interface nsIInputStream;
 
 /**
  * A client for communicating with a JMAP (RFC 8620) mail server.
  *
- * This interface abstracts all JMAP protocol operations, using XPCOM callback
- * interfaces to deliver results asynchronously. The implementation handles
- * session management, request batching, and the JMAP request/response model.
+ * This is the initial minimal implementation providing just initialization,
+ * session discovery, and basic protocol infrastructure.
  *
  * @see https://datatracker.ietf.org/doc/html/rfc8620 (JMAP Core)
  * @see https://datatracker.ietf.org/doc/html/rfc8621 (JMAP Mail)
@@ -32,28 +23,12 @@ interface IJmapSimpleOperationListener;
 interface IJmapClient : nsISupports
 {
   /**
-   * Whether the client is currently running.
-   */
-  readonly attribute boolean running;
-
-  /**
-   * Whether the client is idle (not processing any operation).
-   */
-  readonly attribute boolean idle;
-
-  /**
-   * Initializes the client with session details.
+   * Initializes the client with a JMAP endpoint URL.
    *
-   * This will discover JMAP session endpoints via the well-known
-   * .well-known/jmap path or the configured session URL.
-   *
-   * @param endpoint - The HTTP(S) URL of the JMAP session endpoint
-   *   (e.g., "https://mail.example.com/.well-known/jmap" or
-   *   "https://jmap.example.com").
-   * @param server - The incoming server entity for authentication.
+   * @param endpoint - The HTTP(S) URL of the JMAP server
+   *   (e.g., "https://mail.example.com").
    */
-  void initialize(in AUTF8String endpoint,
-                   in nsIMsgIncomingServer server);
+  void initialize(in AUTF8String endpoint);
 
   /**
    * Shuts down the client, cancelling any pending operations.
@@ -61,420 +36,17 @@ interface IJmapClient : nsISupports
   void shutdown();
 
   /**
-   * Checks connectivity and authentication against the JMAP server.
-   *
-   * Performs a `Session/get` request to verify the account is accessible.
-   *
-   * @param listener - Listener for success/failure notification.
-   * @returns A URI representing the session endpoint.
+   * Discovers the JMAP session endpoints.
    */
-  nsIURI checkConnectivity(in nsIUrlListener listener);
+  void discoverSession();
 
   /**
-   * Synchronizes the local mailbox listing with the remote JMAP server.
-   *
-   * Uses `Mailbox/changes` with a sinceState token for delta sync,
-   * falling back to `Mailbox/get` for initial sync.
-   *
-   * @param listener - Listener for folder change notifications.
-   * @param sinceStateToken - State token from prior sync, or empty for initial.
+   * Gets the current session state token (empty if not initialized).
    */
-  void syncMailboxHierarchy(in IJmapFolderListener listener,
-                             in AUTF8String sinceStateToken);
+  readonly attribute ACString sessionState;
 
   /**
-   * Creates a new mailbox on the server.
-   *
-   * @param listener - Listener for operation result.
-   * @param parentId - The ID of the parent mailbox.
-   * @param name - The name for the new mailbox.
+   * Gets the JMAP account ID (empty if not initialized).
    */
-  void createMailbox(in IJmapSimpleOperationListener listener,
-                      in AUTF8String parentId,
-                      in AUTF8String name);
-
-  /**
-   * Synchronizes the message list for a specific mailbox.
-   *
-   * Uses `Email/changes` with sinceStateToken for delta sync.
-   *
-   * @param listener - Listener for message change notifications.
-   * @param mailboxId - The ID of the mailbox to sync.
-   * @param sinceStateToken - State token from prior sync, or empty.
-   */
-  void syncMessagesForMailbox(in IJmapMessageSyncListener listener,
-                               in AUTF8String mailboxId,
-                               in AUTF8String sinceStateToken);
-
-  /**
-   * Fetches the full content of a message from the server.
-   *
-   * Uses `Email/get` with the `body` property to retrieve the full
-   * RFC 5322 message.
-   *
-   * @param listener - Listener to receive the message data.
-   * @param id - The JMAP Email id.
-   * @param blobId - The blobId for the full message body (optional, may be "").
-   */
-  void getMessage(in IJmapMessageFetchListener listener,
-                   in AUTF8String id,
-                   in AUTF8String blobId);
-
-  /**
-   * Changes the $seen keyword (read/unread) on messages.
-   *
-   * Uses `Email/set` to update the `$seen` keyword.
-   *
-   * @param listener - Listener for operation result.
-   * @param messageIds - The JMAP Email ids to update.
-   * @param isRead - Whether to mark as read ($seen=true) or unread ($seen=false).
-   */
-  void changeReadStatus(in IJmapSimpleOperationListener listener,
-                         in Array<AUTF8String> messageIds,
-                         in boolean isRead);
-
-  /**
-   * Changes the $flagged keyword on messages.
-   *
-   * Uses `Email/set` to update the `$flagged` keyword.
-   *
-   * @param listener - Listener for operation result.
-   * @param messageIds - The JMAP Email ids to update.
-   * @param isFlagged - Whether to mark as flagged or unflagged.
-   */
-  void changeFlagStatus(in IJmapSimpleOperationListener listener,
-                          in Array<AUTF8String> messageIds,
-                          in boolean isFlagged);
-
-  /**
-   * Creates a new email on the server (import/draft).
-   *
-   * Uses `Email/import` to upload a message to the server.
-   *
-   * @param listener - Listener for operation result.
-   * @param mailboxId - The target mailbox ID.
-   * @param isDraft - Whether the message is a draft.
-   * @param isRead - Whether to mark as read on creation.
-   * @param messageStream - Input stream of the RFC 5322 message.
-   */
-  void createMessage(in IJmapMessageCreateListener listener,
-                      in AUTF8String mailboxId,
-                      in boolean isDraft,
-                      in boolean isRead,
-                      in nsIInputStream messageStream);
-
-  /**
-   * Deletes messages from the server.
-   *
-   * Uses `Email/set` with destroy to permanently remove messages.
-   *
-   * @param listener - Listener for operation result.
-   * @param messageIds - The JMAP Email ids to delete.
-   */
-  void deleteMessages(in IJmapSimpleOperationListener listener,
-                       in Array<AUTF8String> messageIds);
-
-  /**
-   * Deletes a mailbox from the server.
-   *
-   * Uses `Mailbox/set` with destroy.
-   *
-   * @param listener - Listener for operation result.
-   * @param mailboxId - The JMAP Mailbox id to delete.
-   */
-  void deleteMailbox(in IJmapSimpleOperationListener listener,
-                      in AUTF8String mailboxId);
-
-  /**
-   * Empties a mailbox by moving all messages to trash or destroying them.
-   *
-   * @param listener - Listener for operation result.
-   * @param mailboxId - The JMAP Mailbox id to empty.
-   * @param messageIds - IDs of messages to destroy.
-   */
-  void emptyMailbox(in IJmapSimpleOperationListener listener,
-                     in AUTF8String mailboxId,
-                     in Array<AUTF8String> messageIds);
-
-  /**
-   * Renames a mailbox.
-   *
-   * Uses `Mailbox/set` to update the name.
-   *
-   * @param listener - Listener for operation result.
-   * @param mailboxId - The JMAP Mailbox id to rename.
-   * @param newName - The new name for the mailbox.
-   */
-  void renameMailbox(in IJmapSimpleOperationListener listener,
-                      in AUTF8String mailboxId,
-                      in AUTF8String newName);
-
-  /**
-   * Moves messages between mailboxes.
-   *
-   * Uses `Email/set` to update the `mailboxIds` property.
-   *
-   * @param listener - Listener for operation result.
-   * @param destinationMailboxId - The target mailbox.
-   * @param messageIds - The message IDs to move.
-   */
-  void moveMessages(in IJmapSimpleOperationListener listener,
-                     in AUTF8String destinationMailboxId,
-                     in Array<AUTF8String> messageIds);
-
-  /**
-   * Copies messages to another mailbox.
-   *
-   * Uses `Email/copy` to create copies in the target mailbox.
-   *
-   * @param listener - Listener for operation result.
-   * @param destinationMailboxId - The target mailbox.
-   * @param messageIds - The message IDs to copy.
-   */
-  void copyMessages(in IJmapSimpleOperationListener listener,
-                     in AUTF8String destinationMailboxId,
-                     in Array<AUTF8String> messageIds);
-
-  /**
-   * Moves mailboxes.
-   *
-   * Uses `Mailbox/set` to update the parentId.
-   *
-   * @param listener - Listener for operation result.
-   * @param destinationParentId - The target parent mailbox.
-   * @param mailboxIds - The mailbox IDs to move.
-   */
-  void moveMailboxes(in IJmapSimpleOperationListener listener,
-                      in AUTF8String destinationParentId,
-                      in Array<AUTF8String> mailboxIds);
-
-  /**
-   * Copies mailboxes.
-   *
-   * @param listener - Listener for operation result.
-   * @param destinationParentId - The target parent mailbox.
-   * @param mailboxIds - The mailbox IDs to copy.
-   */
-  void copyMailboxes(in IJmapSimpleOperationListener listener,
-                      in AUTF8String destinationParentId,
-                      in Array<AUTF8String> mailboxIds);
-
-  /**
-   * Submits a message for delivery.
-   *
-   * Uses `EmailSubmission/set` to queue a message for sending.
-   *
-   * @param listener - Listener for operation result.
-   * @param emailId - The JMAP Email id of the message to submit.
-   */
-  void submitMessage(in IJmapSimpleOperationListener listener,
-                      in AUTF8String emailId);
-
-  /**
-   * Performs a JMAP Email/query against the server.
-   *
-   * @param listener - Listener for operation result.
-   * @param mailboxIds - Mailbox IDs to search in (empty for all).
-   * @param filter - JSON string of the filter condition.
-   * @param sort - JSON string of sort conditions.
-   * @param collapseThreads - Whether to collapse threads.
-   * @param position - Pagination offset.
-   * @param limit - Max results to return.
-   */
-  void queryMessages(in IJmapMessageSyncListener listener,
-                      in Array<AUTF8String> mailboxIds,
-                      in AUTF8String filter,
-                      in AUTF8String sort,
-                      in boolean collapseThreads,
-                      in unsigned long position,
-                      in long limit);
-};
-
-/**
- * Callbacks for JMAP mailbox (folder) synchronization operations.
- */
-[scriptable, uuid(b2c3d4e5-f6a7-8901-bcde-f12345678901)]
-interface IJmapFolderListener : nsISupports
-{
-  /**
-   * Called during initial sync with the root account ID.
-   *
-   * @param id - The JMAP account ID.
-   */
-  void onNewRootMailbox(in AUTF8String id);
-
-  /**
-   * Called when a new mailbox has been created on the server.
-   *
-   * @param id - The JMAP Mailbox id.
-   * @param parentId - The parent mailbox id (may be empty for root-level).
-   * @param name - The mailbox name.
-   * @param role - The JMAP role (e.g., "inbox", "sent", "trash", "drafts", etc.)
-   * @param flags - The nsMsgFolderFlags for the mailbox.
-   */
-  void onMailboxCreated(in AUTF8String id,
-                        in AUTF8String parentId,
-                        in AUTF8String name,
-                        in AUTF8String role,
-                        in unsigned long flags);
-
-  /**
-   * Called when a mailbox has been updated (renamed or moved).
-   *
-   * @param id - The JMAP Mailbox id.
-   * @param parentId - The new parent mailbox id.
-   * @param name - The new name.
-   * @param role - The JMAP role.
-   */
-  void onMailboxUpdated(in AUTF8String id,
-                        in AUTF8String parentId,
-                        in AUTF8String name,
-                        in AUTF8String role);
-
-  /**
-   * Called when a mailbox has been deleted on the server.
-   *
-   * @param id - The JMAP Mailbox id.
-   */
-  void onMailboxDeleted(in AUTF8String id);
-
-  /**
-   * Called after each sync batch completes with a new state token.
-   *
-   * @param sinceStateToken - The new state token for future syncs.
-   */
-  void onSinceStateChanged(in AUTF8String sinceStateToken);
-
-  /**
-   * Called after all sync operations have completed.
-   */
-  void onSuccess();
-
-  /**
-   * Called if the sync operation fails.
-   *
-   * @param status - The error result.
-   */
-  void onFailure(in nsresult status);
-};
-
-/**
- * Callbacks for JMAP message synchronization operations.
- */
-[scriptable, uuid(c3d4e5f6-a7b8-9012-cdef-123456789012)]
-interface IJmapMessageSyncListener : nsISupports
-{
-  /**
-   * Called when a new message has been discovered.
-   *
-   * @param id - The JMAP Email id.
-   * @param threadId - The thread the message belongs to.
-   * @param mailboxIds - Mailbox IDs the message is in.
-   * @param headers - JSON string of the message headers.
-   * @param messageSize - Approximate size in bytes.
-   * @param isRead - Whether the message has $seen set.
-   * @param isFlagged - Whether the message has $flagged set.
-   * @param preview - Preview text from the server.
-   * @param receivedAt - ISO 8601 received timestamp.
-   */
-  void onMessageCreated(in AUTF8String id,
-                        in AUTF8String threadId,
-                        in Array<AUTF8String> mailboxIds,
-                        in AUTF8String headers,
-                        in unsigned long long messageSize,
-                        in boolean isRead,
-                        in boolean isFlagged,
-                        in AUTF8String preview,
-                        in AUTF8String receivedAt);
-
-  /**
-   * Called when a message has been updated.
-   *
-   * @param id - The JMAP Email id.
-   * @param mailboxIds - Updated mailbox IDs.
-   * @param headers - Updated headers JSON.
-   * @param messageSize - Updated size.
-   * @param isRead - Updated read status.
-   * @param isFlagged - Updated flag status.
-   * @param preview - Updated preview.
-   */
-  void onMessageUpdated(in AUTF8String id,
-                        in Array<AUTF8String> mailboxIds,
-                        in AUTF8String headers,
-                        in unsigned long long messageSize,
-                        in boolean isRead,
-                        in boolean isFlagged,
-                        in AUTF8String preview);
-
-  /**
-   * Called when a message's read status has changed.
-   *
-   * @param id - The JMAP Email id.
-   * @param isRead - The new read status.
-   */
-  void onReadStatusChanged(in AUTF8String id, in boolean isRead);
-
-  /**
-   * Called when a message has been deleted.
-   *
-   * @param id - The JMAP Email id.
-   */
-  void onMessageDeleted(in AUTF8String id);
-
-  /**
-   * Called after each sync batch with a new state token.
-   */
-  void onSinceStateChanged(in AUTF8String sinceStateToken);
-
-  /**
-   * Called after all sync operations have completed.
-   */
-  void onSyncComplete();
-
-  /**
-   * Called if the sync operation fails.
-   *
-   * @param status - The error result.
-   */
-  void onFailure(in nsresult status);
-};
-
-/**
- * Callbacks for JMAP message creation (import).
- */
-[scriptable, uuid(d4e5f6a7-b8c9-0123-def0-234567890123)]
-interface IJmapMessageCreateListener : nsISupports
-{
-  /**
-   * Called when the server operation is finished.
-   *
-   * @param status - Result of the operation.
-   * @param id - The server-assigned JMAP Email id (on success).
-   */
-  void onRemoteCreateFinished(in nsresult status, in AUTF8String id);
-};
-
-/**
- * Listener for JMAP message content fetching.
- */
-[scriptable, uuid(e5f6a7b8-c9d0-1234-ef01-345678901234)]
-interface IJmapMessageFetchListener : nsISupports
-{
-  void onFetchStart();
-  void onFetchedDataAvailable(in nsIInputStream inputStream);
-  void onFetchStop(in nsresult status);
-};
-
-/**
- * Listener for "simple" JMAP operations that only need success/failure.
- */
-[scriptable, uuid(f6a7b8c9-d0e1-2345-f012-456789012345)]
-interface IJmapSimpleOperationListener : nsISupports
-{
-  /**
-   * Signals successful completion of the operation.
-   *
-   * @param newIds - New IDs created by the operation (if applicable).
-   */
-  void onOperationSuccess(in Array<AUTF8String> newIds);
+  readonly attribute ACString accountId;
 };

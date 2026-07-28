@@ -8,21 +8,19 @@
 #include "nsIProtocolHandler.h"
 
 /**
- * JmapProtocolHandler handles the "x-moz-jmap" URL scheme for JMAP
- * message resources.
+ * JMAP protocol handler.
  */
 class JmapProtocolHandler : public nsIProtocolHandler {
  public:
   NS_DECL_ISUPPORTS
   NS_DECL_NSIPROTOCOLHANDLER
 
-  JmapProtocolHandler() = default;
+  static nsresult Create(REFNSIID aIID, void** aResult);
 
-  static nsresult Create(nsISupports* aOuter, REFNSIID aIID,
-                          void** aResult);
+  JmapProtocolHandler();
 
  protected:
-  virtual ~JmapProtocolHandler() = default;
+  virtual ~JmapProtocolHandler();
 };
 
 #endif  // COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPPROTOCOLHANDLER_H_
