@@ -5,7 +5,10 @@
 #include "JmapFolder.h"
 #include "JmapClient.h"
 #include "mozilla/Logging.h"
+#include "nsIMsgDatabase.h"
+#include "nsMsgDatabase.h"
 #include "nsPrintfCString.h"
+#include "nsServiceManagerUtils.h"
 #include <cstdlib>
 
 extern mozilla::LazyLogModule gJmapLog;
@@ -16,11 +19,33 @@ JmapFolder::JmapFolder() = default;
 
 JmapFolder::~JmapFolder() {}
 
+// Makes sure the database is open and exists.  If the database is valid then
+// returns NS_OK.  Otherwise returns a failure error value.
 NS_IMETHODIMP
 JmapFolder::GetDatabase() {
-  // For now, return NS_ERROR_NOT_INITIALIZED.
-  // TODO: Open/create the local mbox database for this folder.
-  return NS_ERROR_NOT_INITIALIZED;
+  nsresult rv = NS_OK;
+  if (!mDatabase) {
+    nsCOMPtr<nsIMsgDBService> msgDBService =
+        do_GetService("@mozilla.org/msgDatabase/msgDBService;1", &rv);
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    // Try to open existing database; create new if it doesn't exist.
+    rv = msgDBService->OpenFolderDB(this, false, getter_AddRefs(mDatabase));
+    if (NS_FAILED(rv)) {
+      rv = msgDBService->CreateNewDB(this, getter_AddRefs(mDatabase));
+    }
+    NS_ENSURE_SUCCESS(rv, rv);
+
+    // Save a local copy since UpdateNewMessages can null mDatabase.
+    nsCOMPtr<nsIMsgDatabase> database(mDatabase);
+    UpdateNewMessages();
+    if (mAddListener) {
+      database->AddListener(this);
+    }
+    UpdateSummaryTotals(true);
+    mDatabase = database;
+  }
+  return rv;
 }
 
 NS_IMETHODIMP

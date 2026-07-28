@@ -160,10 +160,13 @@ impl XpcomJmapBridge {
         moz_task::spawn_local("jmap_sync_mailboxes", async move {
             match crate::client::operations::sync_all_mailboxes(&client, sync_state_opt.as_deref()).await {
                 Ok((state, mailboxes)) => {
-                    let count = mailboxes.len() as u32;
+                    // Serialize mailbox data as JSON so the C++ side can
+                    // create local Thunderbird folders with full metadata.
+                    let json = serde_json::to_string(&mailboxes).unwrap_or_default();
                     unsafe {
                         let state_ns = nsCString::from(&state);
-                        listener.OnFolderDiscoveryComplete(&*state_ns, count);
+                        let json_ns = nsCString::from(&json);
+                        listener.OnFolderDiscoveryComplete(&*state_ns, &*json_ns);
                     }
                 }
                 Err(e) => {

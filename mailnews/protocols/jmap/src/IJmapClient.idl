@@ -19,9 +19,11 @@ interface IJmapFolderListener : nsISupports
    * Called when folder discovery is complete.
    *
    * @param aState - The new folder sync state token
-   * @param aFolderCount - Number of folders discovered
+   * @param aMailboxesJSON - JSON array of mailbox objects, each with:
+   *   id, name, parentId (nullable), role (nullable), sortOrder,
+   *   totalEmails, unreadEmails, totalThreads, unreadThreads
    */
-  void onFolderDiscoveryComplete(in ACString aState, in unsigned long aFolderCount);
+  void onFolderDiscoveryComplete(in ACString aState, in AUTF8String aMailboxesJSON);
 
   /**
    * Called when a folder sync operation fails.

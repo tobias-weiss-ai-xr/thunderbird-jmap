@@ -5,7 +5,7 @@
 #ifndef COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPFOLDERSYNCLISTENER_H_
 #define COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPFOLDERSYNCLISTENER_H_
 
-#include "IJmapClient.h"  // Generated: IJmapFolderListener, IJmapMailbox
+#include "IJmapClient.h"  // Generated: IJmapFolderListener
 #include "JmapIncomingServer.h"
 #include "nsString.h"
 
@@ -22,6 +22,9 @@ class JmapFolderSyncListener final : public IJmapFolderListener {
  private:
   ~JmapFolderSyncListener() = default;
 
+  /** Parse the JSON array of mailboxes and create local folders. */
+  nsresult ParseAndCreateFolders(const nsACString& aJSON);
+
   nsresult FindFolderByJmapId(const nsACString& aJmapId,
                                nsIMsgFolder** aResult);
 
@@ -29,7 +32,9 @@ class JmapFolderSyncListener final : public IJmapFolderListener {
                         const nsACString& aParentJmapId,
                         const nsAString& aName,
                         const nsACString& aRole,
-                        int32_t aSortOrder);
+                        int32_t aSortOrder,
+                        int32_t aTotalEmails,
+                        int32_t aUnreadEmails);
 
   static uint32_t RoleToFlags(const nsACString& aRole);
 

@@ -5,6 +5,7 @@
 EXPORTS += [
     "JmapClient.h",
     "JmapFolder.h",
+    "JmapFolderSyncListener.h",
     "JmapIncomingServer.h",
     "JmapProtocolHandler.h",
     "JmapProtocolInfo.h",
@@ -15,6 +16,7 @@ EXPORTS += [
 UNIFIED_SOURCES += [
     "JmapClient.cpp",
     "JmapFolder.cpp",
+    "JmapFolderSyncListener.cpp",
     "JmapIncomingServer.cpp",
     "JmapListeners.cpp",
     "JmapProtocolHandler.cpp",

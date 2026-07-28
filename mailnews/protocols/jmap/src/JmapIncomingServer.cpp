@@ -7,6 +7,7 @@
 #include "IJmapClient.h"
 #include "JmapClient.h"
 #include "JmapFolder.h"
+#include "JmapFolderSyncListener.h"
 #include "mozilla/Logging.h"
 #include "nsComponentManagerUtils.h"
 #include "nsIMsgFolder.h"
@@ -114,9 +115,17 @@ JmapIncomingServer::SyncFolderHierarchy(IJmapFolderListener* aListener,
   RefPtr<IJmapClient> client;
   MOZ_TRY(GetProtocolClient(getter_AddRefs(client)));
 
-  // Get the sync state token (empty for first sync).
+  // Retrieve the persisted sync state from the root folder.
   nsCString syncState;
-  // TODO: Persist and retrieve sync state from folder properties.
+  nsCOMPtr<nsIMsgFolder> rootFolder;
+  nsresult rv = GetRootFolder(getter_AddRefs(rootFolder));
+  if (NS_SUCCEEDED(rv) && rootFolder) {
+    nsAutoCString storedState;
+    rv = rootFolder->GetStringProperty("jmapMailboxState", storedState);
+    if (NS_SUCCEEDED(rv)) {
+      syncState = storedState;
+    }
+  }
 
   return client->SyncMailboxes(aListener, syncState);
 }
@@ -184,15 +193,47 @@ JmapIncomingServer::GetNewMessages(nsIMsgFolder* aFolder,
                                    nsIMsgWindow* aMsgWindow,
                                    nsIUrlListener* aUrlListener) {
   MOZ_LOG(gJmapLog, LogLevel::Debug,
-          ("JMAP: GetNewMessages requested"));
+          ("JMAP: GetNewMessages for folder"));
 
-  // For now, just sync folder hierarchy.
-  // TODO: sync message list for the specific folder.
+  NS_ENSURE_ARG_POINTER(aFolder);
+
   RefPtr<IJmapClient> client;
   nsresult rv = GetProtocolClient(getter_AddRefs(client));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  // TODO: Implement proper per-folder message sync.
+  // Retrieve the JMAP mailbox ID from the folder's property.
+  nsAutoCString mailboxId;
+  rv = aFolder->GetStringProperty("jmapMailboxId", mailboxId);
+  if (NS_FAILED(rv) || mailboxId.IsEmpty()) {
+    MOZ_LOG(gJmapLog, LogLevel::Warning,
+            ("JMAP: GetNewMessages — folder has no jmapMailboxId"));
+    return NS_ERROR_NOT_AVAILABLE;
+  }
+
+  // Retrieve the persisted sync state for this folder.
+  nsAutoCString syncState;
+  rv = aFolder->GetStringProperty("jmapSyncState", syncState);
+  if (NS_FAILED(rv)) {
+    syncState.Truncate();
+  }
+
+  // Create a message sync listener that will update the local database
+  // with fetched message IDs.
+  // For now we trigger the sync and rely on the folder notification system.
+  RefPtr<IJmapMessageListener> msgListener;
+  // TODO: Create a proper JmapMessageSyncListener that populates the
+  // local database with message headers from the server.
+  // For now, use a simple callback-based approach.
+  rv = client->SyncMessages(nullptr, mailboxId, syncState);
+  NS_ENSURE_SUCCESS(rv, rv);
+
+  // Notify the URL listener that we're done.
+  if (aUrlListener) {
+    nsCOMPtr<nsIURI> uri;
+    rv = client->CheckConnectivity(aUrlListener, getter_AddRefs(uri));
+    NS_ENSURE_SUCCESS(rv, rv);
+  }
+
   return NS_OK;
 }
 
@@ -200,25 +241,57 @@ NS_IMETHODIMP
 JmapIncomingServer::PerformBiff(nsIMsgWindow* aMsgWindow) {
   MOZ_LOG(gJmapLog, LogLevel::Debug, ("JMAP: PerformBiff"));
 
-  // Sync folder hierarchy on biff.
+  // Biff checks for new messages. For JMAP, we sync folder hierarchy
+  // to discover any new mailboxes, then trigger message sync.
   RefPtr<IJmapClient> client;
   nsresult rv = GetProtocolClient(getter_AddRefs(client));
   NS_ENSURE_SUCCESS(rv, rv);
 
-  // TODO: Full biff implementation with message sync.
-  return NS_OK;
+  // Create a folder sync listener that will trigger message sync
+  // after folder discovery completes.
+  RefPtr<JmapFolderSyncListener> folderListener =
+      new JmapFolderSyncListener(this, [this, aMsgWindow]() -> nsresult {
+        // After folder sync, trigger message sync on all JMAP folders.
+        nsCOMPtr<nsIMsgFolder> rootFolder;
+        nsresult rv = GetRootFolder(getter_AddRefs(rootFolder));
+        NS_ENSURE_SUCCESS(rv, rv);
+
+        nsTArray<RefPtr<nsIMsgFolder>> toScan;
+        toScan.AppendElement(rootFolder);
+
+        while (!toScan.IsEmpty()) {
+          nsTArray<RefPtr<nsIMsgFolder>> nextScan;
+          for (auto& folder : toScan) {
+            nsAutoCString mailboxId;
+            rv = folder->GetStringProperty("jmapMailboxId", mailboxId);
+            if (NS_SUCCEEDED(rv) && !mailboxId.IsEmpty()) {
+              GetNewMessages(folder, aMsgWindow, nullptr);
+            }
+
+            nsTArray<RefPtr<nsIMsgFolder>> children;
+            rv = folder->GetSubFolders(children);
+            if (NS_SUCCEEDED(rv)) {
+              nextScan.AppendElements(children);
+            }
+          }
+          toScan = std::move(nextScan);
+        }
+        return NS_OK;
+      });
+
+  return SyncFolderHierarchy(folderListener, aMsgWindow);
 }
 
 NS_IMETHODIMP
 JmapIncomingServer::PerformExpand(nsIMsgWindow* aMsgWindow) {
   MOZ_LOG(gJmapLog, LogLevel::Debug, ("JMAP: PerformExpand"));
 
-  RefPtr<IJmapClient> client;
-  nsresult rv = GetProtocolClient(getter_AddRefs(client));
-  NS_ENSURE_SUCCESS(rv, rv);
+  // PerformExpand is called when the user expands the folder tree.
+  // We sync the folder hierarchy to ensure all mailboxes are visible.
+  RefPtr<JmapFolderSyncListener> folderListener =
+      new JmapFolderSyncListener(this);
 
-  // TODO: Sync folder list and expand tree.
-  return NS_OK;
+  return SyncFolderHierarchy(folderListener, aMsgWindow);
 }
 
 NS_IMETHODIMP
