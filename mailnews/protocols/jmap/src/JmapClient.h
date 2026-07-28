@@ -5,31 +5,15 @@
 #ifndef COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPCLIENT_H_
 #define COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPCLIENT_H_
 
-#include "IJmapClient.h"
-#include "nsCOMPtr.h"
-#include "nsString.h"
-
+#include "nsID.h"
 #include "mozilla/Logging.h"
 
+// JMAP logging module. Used by both C++ and Rust (via log crate).
 extern mozilla::LazyLogModule gJmapLog;
 
-/**
- * JmapClient implements IJmapClient to communicate with a JMAP server.
- *
- * All actual protocol logic is implemented in Rust (rust/jmap_xpcom/).
- * This C++ class serves as a lightweight XPCOM entry point.
- */
-class JmapClient final : public IJmapClient {
- public:
-  NS_DECL_ISUPPORTS
-  NS_DECL_IJMAPCLIENT
-
-  JmapClient();
-
- private:
-  ~JmapClient();
-
-  bool mInitialized = false;
-};
+extern "C" {
+// Instantiates a new IJmapClient (implemented in Rust via jmap_xpcom).
+MOZ_EXPORT nsresult NS_CreateJmapClient(REFNSIID aIID, void** aResult);
+}
 
 #endif  // COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPCLIENT_H_

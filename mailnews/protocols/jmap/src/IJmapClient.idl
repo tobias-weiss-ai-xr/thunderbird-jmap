@@ -8,13 +8,78 @@
 
 interface nsIMsgIncomingServer;
 interface nsIUrlListener;
-interface nsIInputStream;
+
+/**
+ * A listener for JMAP folder sync operations.
+ */
+[scriptable, uuid(5a1b2c3d-e5f6-7890-abcd-ef1234567891)]
+interface IJmapFolderListener : nsISupports
+{
+  /**
+   * Called when folder discovery is complete.
+   *
+   * @param aState - The new folder sync state token
+   * @param aFolderCount - Number of folders discovered
+   */
+  void onFolderDiscoveryComplete(in ACString aState, in unsigned long aFolderCount);
+
+  /**
+   * Called when a folder sync operation fails.
+   *
+   * @param aStatus - The error code
+   * @param aMessage - Error description
+   */
+  void onFolderDiscoveryError(in nsresult aStatus, in ACString aMessage);
+};
+
+/**
+ * A listener for JMAP message sync operations.
+ */
+[scriptable, uuid(5a1b2c3d-e5f6-7890-abcd-ef1234567892)]
+interface IJmapMessageListener : nsISupports
+{
+  /**
+   * Called when a batch of message headers has been fetched.
+   *
+   * @param aState - The new message sync state token
+   * @param aMessageIds - Array of message IDs fetched
+   */
+  void onMessagesFetched(in ACString aState, in Array<ACString> aMessageIds);
+
+  /**
+   * Called when message fetching fails.
+   *
+   * @param aStatus - The error code
+   * @param aMessage - Error description
+   */
+  void onMessageFetchError(in nsresult aStatus, in ACString aMessage);
+};
+
+/**
+ * A listener for simple JMAP operations (delete, move, etc.).
+ */
+[scriptable, uuid(5a1b2c3d-e5f6-7890-abcd-ef1234567893)]
+interface IJmapOperationListener : nsISupports
+{
+  /**
+   * Called when an operation succeeds.
+   */
+  void onOperationComplete();
+
+  /**
+   * Called when an operation fails.
+   *
+   * @param aStatus - The error code
+   * @param aMessage - Error description
+   */
+  void onOperationError(in nsresult aStatus, in ACString aMessage);
+};
 
 /**
  * A client for communicating with a JMAP (RFC 8620) mail server.
  *
- * This is the initial minimal implementation providing just initialization,
- * session discovery, and basic protocol infrastructure.
+ * This is the JMAP protocol client that handles all communication
+ * with a JMAP server (e.g., Stalwart Mail Server).
  *
  * @see https://datatracker.ietf.org/doc/html/rfc8620 (JMAP Core)
  * @see https://datatracker.ietf.org/doc/html/rfc8621 (JMAP Mail)
@@ -24,6 +89,7 @@ interface IJmapClient : nsISupports
 {
   /**
    * Initializes the client with a JMAP endpoint URL.
+   * This triggers session discovery asynchronously.
    *
    * @param endpoint - The HTTP(S) URL of the JMAP server
    *   (e.g., "https://mail.example.com").
@@ -36,7 +102,9 @@ interface IJmapClient : nsISupports
   void shutdown();
 
   /**
-   * Discovers the JMAP session endpoints.
+   * Discovers the JMAP session (accounts, API URLs, capabilities).
+   * Async — results available via accountId/sessionState getters
+   * once complete.
    */
   void discoverSession();
 
@@ -49,4 +117,91 @@ interface IJmapClient : nsISupports
    * Gets the JMAP account ID (empty if not initialized).
    */
   readonly attribute ACString accountId;
+
+  /**
+   * Syncs all mailboxes from the server.
+   *
+   * @param aListener - Callback for results
+   * @param aSyncState - Previous sync state (empty for first sync)
+   */
+  void syncMailboxes(in IJmapFolderListener aListener, in ACString aSyncState);
+
+  /**
+   * Fetches messages for a given mailbox.
+   *
+   * @param aListener - Callback for results
+   * @param aMailboxId - The JMAP mailbox ID
+   * @param aSyncState - Previous sync state (empty for first sync)
+   */
+  void syncMessages(in IJmapMessageListener aListener, in ACString aMailboxId, in ACString aSyncState);
+
+  /**
+   * Deletes messages by ID.
+   *
+   * @param aListener - Callback for completion
+   * @param aMessageIds - Array of JMAP message IDs to delete
+   */
+  void deleteMessages(in IJmapOperationListener aListener, in Array<ACString> aMessageIds);
+
+  /**
+   * Sets the read/seen status of messages.
+   *
+   * @param aListener - Callback for completion
+   * @param aMessageIds - Array of JMAP message IDs
+   * @param aIsRead - Whether messages should be marked as read
+   */
+  void setReadStatus(in IJmapOperationListener aListener, in Array<ACString> aMessageIds, in boolean aIsRead);
+
+  /**
+   * Sets the flagged/starred status of messages.
+   *
+   * @param aListener - Callback for completion
+   * @param aMessageIds - Array of JMAP message IDs
+   * @param aIsFlagged - Whether messages should be flagged
+   */
+  void setFlagStatus(in IJmapOperationListener aListener, in Array<ACString> aMessageIds, in boolean aIsFlagged);
+
+  /**
+   * Moves messages to a different mailbox.
+   *
+   * @param aListener - Callback for completion
+   * @param aMessageIds - Array of JMAP message IDs to move
+   * @param aDestinationMailboxId - Target mailbox JMAP ID
+   */
+  void moveMessages(in IJmapOperationListener aListener, in Array<ACString> aMessageIds, in ACString aDestinationMailboxId);
+
+  /**
+   * Creates a new mailbox folder.
+   *
+   * @param aListener - Callback for completion
+   * @param aName - Folder display name
+   * @param aParentId - Parent folder ID (empty for root-level)
+   */
+  void createMailbox(in IJmapOperationListener aListener, in AString aName, in ACString aParentId);
+
+  /**
+   * Deletes a mailbox folder.
+   *
+   * @param aListener - Callback for completion
+   * @param aMailboxId - The JMAP mailbox ID to delete
+   */
+  void deleteMailbox(in IJmapOperationListener aListener, in ACString aMailboxId);
+
+  /**
+   * Checks connectivity to the JMAP server.
+   *
+   * @param aUrlListener - Callback for URL status
+   * @return - The running URL for the check
+   */
+  nsIURI checkConnectivity(in nsIUrlListener aUrlListener);
+
+  /**
+   * Gets whether the client is currently running operations.
+   */
+  readonly attribute boolean running;
+
+  /**
+   * Gets whether the client is idle (no pending operations).
+   */
+  readonly attribute boolean idle;
 };

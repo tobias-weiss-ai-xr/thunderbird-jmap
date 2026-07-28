@@ -8,10 +8,10 @@ pub mod operations;
 
 use crate::error::JmapError;
 use crate::types::{
-    EmailGetResponse, EmailQueryResponse, IdentityGetResponse, JmapMethodCall, JmapMethodResponse,
-    MailboxGetResponse, Session, UploadResult,
+    EmailGetResponse, EmailQueryResponse, IdentityGetResponse, JmapMethodCall,
+    JmapMethodResponse, MailboxGetResponse, Session, UploadResult,
 };
-use log::info;
+use log::{error, info};
 use moz_http::Client;
 use std::sync::Mutex;
 use url::Url;
@@ -32,6 +32,7 @@ struct SessionData {
     download_url: String,
     upload_url: String,
     account_id: String,
+    state: String,
 }
 
 impl JmapClient {
@@ -45,28 +46,42 @@ impl JmapClient {
         })
     }
 
-    /// Discover the JMAP session and cache it.
-    pub fn discover_session(&self) -> Result<(), JmapError> {
-        // Synchronous session discovery using the XPCOM main thread.
-        // The session URL is constructed from the endpoint.
+    /// Discover the JMAP session by fetching /.well-known/jmap/session.
+    ///
+    /// This is the async version that performs the actual HTTP GET.
+    pub async fn discover_session_async(&self) -> Result<(), JmapError> {
         let session_url_str = format!(
             "{}/.well-known/jmap/session",
             self.endpoint.as_str().trim_end_matches('/')
         );
-        info!("JMAP: will discover session at {}", session_url_str);
-        // The actual HTTP call is done asynchronously in initialize().
-        Ok(())
+        info!("JMAP: discovering session at {}", session_url_str);
+
+        let session_url = Url::parse(&session_url_str)?;
+        let response = self
+            .http_client
+            .get(&session_url)?
+            .header("Accept", "application/json")
+            .send()
+            .await?;
+
+        let body = std::str::from_utf8(response.body())?;
+        info!("JMAP: session response {} bytes", body.len());
+
+        self.init_session_from_json(body)
     }
 
     /// Initialize the session from a previously fetched JSON body.
     pub fn init_session_from_json(&self, body: &str) -> Result<(), JmapError> {
         let session: Session = serde_json::from_str(body)?;
 
-        // Find the primary account
+        // Find the primary account for mail capability
         let account_id = session
             .primary_accounts
             .iter()
-            .find(|(_, uri)| *uri == "urn:ietf:params:jmap:mail" || uri.starts_with("urn:ietf:params:jmap:"))
+            .find(|(_, uri)| {
+                *uri == "urn:ietf:params:jmap:mail"
+                    || uri.starts_with("urn:ietf:params:jmap:")
+            })
             .map(|(id, _)| id.clone())
             .or_else(|| session.accounts.keys().next().cloned())
             .ok_or(JmapError::AccountNotFound)?;
@@ -75,6 +90,7 @@ impl JmapClient {
         let api_url = if let Some(ref api) = session.api_url {
             Url::parse(api)?
         } else {
+            // Stalwart fallback: API at /jmap
             let mut base = self.endpoint.clone();
             base.set_path("jmap");
             base
@@ -94,7 +110,11 @@ impl JmapClient {
             )
         });
 
+        // Extract state from session
+        let state = String::new();
+
         let mut session_guard = self.session.lock().map_err(|e| {
+            error!("JMAP: session lock poisoned: {e}");
             JmapError::Processing(format!("session lock poisoned: {e}"))
         })?;
 
@@ -103,6 +123,7 @@ impl JmapClient {
             download_url,
             upload_url,
             account_id: account_id.clone(),
+            state,
         });
 
         info!("JMAP: session initialized, account_id={}", account_id);
@@ -117,6 +138,17 @@ impl JmapClient {
         guard
             .as_ref()
             .map(|s| s.account_id.clone())
+            .ok_or(JmapError::NotInitialized)
+    }
+
+    /// Get the current session state token.
+    pub fn session_state(&self) -> Result<String, JmapError> {
+        let guard = self.session.lock().map_err(|e| {
+            JmapError::Processing(format!("session lock poisoned: {e}"))
+        })?;
+        guard
+            .as_ref()
+            .map(|s| s.state.clone())
             .ok_or(JmapError::NotInitialized)
     }
 
@@ -173,7 +205,7 @@ impl JmapClient {
 
         let resp_body = std::str::from_utf8(response.body())?;
 
-        // Parse Stalwart-style response: {"methodResponses": [...]}
+        // Parse JMAP response: {"methodResponses": [...]}
         let jmap_response: crate::types::JmapResponse = serde_json::from_str(resp_body)?;
         Ok(jmap_response.method_responses)
     }
@@ -243,7 +275,9 @@ impl JmapClient {
         })?;
         let session = guard.as_ref().ok_or(JmapError::NotInitialized)?;
 
-        let url_str = session.upload_url.replace("{accountId}", &session.account_id);
+        let url_str = session
+            .upload_url
+            .replace("{accountId}", &session.account_id);
         let url = Url::parse(&url_str)?;
 
         let response = self

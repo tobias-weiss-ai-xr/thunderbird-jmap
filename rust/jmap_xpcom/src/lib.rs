@@ -4,9 +4,10 @@
 
 //! JMAP XPCOM library.
 //!
-//! This crate provides the core JMAP client implementation used by the
-//! C++ XPCOM bridge in mailnews/protocols/jmap/src/JmapClient.cpp.
+//! This crate provides the JMAP protocol client as an XPCOM component,
+//! following the same pattern as ews_xpcom.
 
+pub mod bridge;
 pub mod client;
 pub mod error;
 pub mod types;
