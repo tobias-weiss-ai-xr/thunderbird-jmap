@@ -7,10 +7,8 @@
 
 #include "IJmapFolder.h"
 #include "nsMsgDBFolder.h"
+#include "nsString.h"
 
-/**
- * The JMAP implementation of nsIMsgFolder.
- */
 class JmapFolder : public nsMsgDBFolder, public IJmapFolder {
  public:
   NS_DECL_IJMAPFOLDER
@@ -20,7 +18,9 @@ class JmapFolder : public nsMsgDBFolder, public IJmapFolder {
 
  protected:
   virtual ~JmapFolder();
-  nsresult GetDatabase() override;
+
+  // nsMsgDBFolder override — pure virtual in nsMsgDBFolder.
+  NS_IMETHOD GetDatabase() override;
 };
 
 #endif  // COMM_MAILNEWS_PROTOCOLS_JMAP_SRC_JMAPFOLDER_H_

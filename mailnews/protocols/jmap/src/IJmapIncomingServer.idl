@@ -4,15 +4,44 @@
 
 #include "nsISupports.idl"
 
+interface IJmapClient;
+interface IJmapFolderListener;
+interface nsIMsgWindow;
+interface nsIUrlListener;
+interface nsIURI;
+
 /**
  * JMAP-specific incoming server interface.
  */
 [scriptable, uuid(12345678-90ab-cdef-1234-567890abcdef)]
 interface IJmapIncomingServer : nsISupports
 {
-  /** The URL for the JMAP server. */
+  /** The URL for the JMAP server (e.g., "https://mail.example.com"). */
   attribute ACString jmapUrl;
 
-  /** The JMAP account ID. */
+  /** The JMAP account ID, assigned by the server after session discovery. */
   attribute ACString jmapAccountId;
+
+  /**
+   * Retrieves the IJmapClient for this server. Creates one if needed.
+   */
+  IJmapClient getProtocolClient();
+
+  /**
+   * Whether the protocol client is currently running operations.
+   */
+  readonly attribute boolean protocolClientRunning;
+
+  /**
+   * Whether the protocol client is idle.
+   */
+  readonly attribute boolean protocolClientIdle;
+
+  /**
+   * Syncs the folder hierarchy (mailbox list) from the server.
+   *
+   * @param aListener  - Callback for folder discovery results
+   * @param aMsgWindow - Optional UI window for status
+   */
+  void syncFolderHierarchy(in IJmapFolderListener aListener, in nsIMsgWindow aMsgWindow);
 };

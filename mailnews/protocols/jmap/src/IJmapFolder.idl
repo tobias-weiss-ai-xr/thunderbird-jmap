@@ -3,15 +3,52 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "nsISupports.idl"
-#include "MailNewsTypes2.idl"
-
-interface nsIMsgIncomingServer;
 
 /**
- * JMAP folder interface.
+ * JMAP-specific folder interface.
  */
-[scriptable, uuid(11112222-3333-4444-5555-666677778888)]
+[scriptable, uuid(a2345678-90ab-cdef-1234-567890abcdef)]
 interface IJmapFolder : nsISupports
 {
-  readonly attribute AUTF8String folderId;
+  /**
+   * The JMAP mailbox ID for this folder, as assigned by the server.
+   * This is the unique identifier used in JMAP API calls.
+   */
+  attribute ACString jmapMailboxId;
+
+  /**
+   * The JMAP mailbox role (e.g., "inbox", "archive", "drafts", "sent", "trash", "junk").
+   * Empty string if no role is assigned.
+   */
+  readonly attribute ACString jmapRole;
+
+  /**
+   * The sort order of this mailbox on the server.
+   */
+  readonly attribute long jmapSortOrder;
+
+  /**
+   * The total number of messages in this mailbox.
+   */
+  attribute long totalMessages;
+
+  /**
+   * The number of unread messages in this mailbox.
+   */
+  attribute long unreadMessages;
+
+  /**
+   * The total number of threads in this mailbox.
+   */
+  attribute long totalThreads;
+
+  /**
+   * The number of unread threads in this mailbox.
+   */
+  attribute long unreadThreads;
+
+  /**
+   * The mailbox state token (for delta sync).
+   */
+  readonly attribute ACString jmapMailboxState;
 };
