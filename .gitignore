@@ -32,6 +32,8 @@ tools/
 other-licenses/
 
 # Ignore upstream mailnews directories and root files, but keep JMAP + build file
+/moz.build
+mailnews/moz.build
 mailnews/*.orig
 mailnews/jar.mn
 mailnews/moz.configure
@@ -55,10 +57,9 @@ mailnews/protocols/exchange/
 mailnews/search/
 mailnews/test/
 
-# Ignore upstream Rust crates, but keep JMAP + build files
+# Ignore upstream Rust crates, but keep JMAP + gkrust + build files
 rust/docs/
 rust/ews_xpcom/
-rust/gkrust/
 rust/graph_xpcom/
 rust/gtest/
 rust/mailnews_string_glue/
@@ -108,7 +109,6 @@ comm
 eslint-ignores.config.mjs
 eslint.config.mjs
 mach
-moz.build
 pyproject.toml
 rust/.cargo/
 rust/Cargo.lock
