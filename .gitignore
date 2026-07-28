@@ -23,7 +23,6 @@ calendar/
 chat/
 docs/
 mail/
-mailnews/intl/
 python/
 suite/
 taskcluster/
@@ -31,7 +30,46 @@ testing/
 third_party/
 tools/
 other-licenses/
+
+# Ignore upstream mailnews directories and root files, but keep JMAP + build file
+mailnews/*.orig
+mailnews/jar.mn
+mailnews/moz.configure
+mailnews/nss-extra.symbols
+mailnews/addrbook/
+mailnews/base/
+mailnews/compose/
+mailnews/db/
+mailnews/export/
+mailnews/extensions/
+mailnews/imap/
+mailnews/import/
+mailnews/intl/
+mailnews/jsaccount/
+mailnews/local/
+mailnews/mapi/
+mailnews/mime/
+mailnews/news/
+mailnews/protocols/common/
+mailnews/protocols/exchange/
+mailnews/search/
+mailnews/test/
+
+# Ignore upstream Rust crates, but keep JMAP + build files
+rust/docs/
+rust/ews_xpcom/
+rust/gkrust/
+rust/graph_xpcom/
+rust/gtest/
+rust/mailnews_string_glue/
+rust/mailnews_ui_glue/
+rust/moz_http/
+rust/ms_graph_tb/
+rust/protocol_shared/
 rust/__pycache__/
+rust/src/
+rust/sys_tray/
+rust/xpcom_async_glue/
 
 # IDE
 .vscode/
@@ -47,3 +85,34 @@ Thumbs.db
 # Rust target
 rust/target/
 *.mozbuild
+
+# Root-level upstream files
+*.orig
+.arcconfig
+.clang-format-ignore
+.cron.yml
+.gecko_rev.yml
+.gitattributes
+.hg-annotate-ignore-revs
+.prettierignore
+.prettierignore-css
+.prettierignore-non-css
+.readthedocs.yaml
+.stylelintignore
+.stylelintrc.js
+.taskcluster.yml
+.yamllint
+.ycm_extra_conf.py
+AUTHORS
+comm
+eslint-ignores.config.mjs
+eslint.config.mjs
+mach
+moz.build
+pyproject.toml
+rust/.cargo/
+rust/Cargo.lock
+rust/Cargo.toml.orig
+rust/checksums.json
+rust/mach_commands.py
+rust/moz.build.orig
