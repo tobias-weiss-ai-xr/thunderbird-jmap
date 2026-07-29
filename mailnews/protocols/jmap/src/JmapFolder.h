@@ -16,6 +16,10 @@ class JmapFolder : public nsMsgDBFolder, public IJmapFolder {
 
   JmapFolder();
 
+  // Note: GetTotalMessages(int32_t*) from IJmapFolder intentionally hides
+  // nsMsgDBFolder::GetTotalMessages(bool, int32_t*). They are different methods
+  // with different signatures and purposes.
+
  protected:
   virtual ~JmapFolder();
 
