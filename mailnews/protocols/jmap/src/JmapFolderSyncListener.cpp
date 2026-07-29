@@ -37,7 +37,7 @@ NS_IMETHODIMP
 JmapFolderSyncListener::OnFolderDiscoveryComplete(
     const nsACString& aState, const nsACString& aMailboxesJSON) {
   MOZ_LOG(gJmapLog, LogLevel::Info,
-          ("JMAP: folder discovery complete: state=%s, JSON=%d bytes",
+          ("JMAP: folder discovery complete: state=%s, JSON=%zu bytes",
            PromiseFlatCString(aState).get(),
            aMailboxesJSON.Length()));
 

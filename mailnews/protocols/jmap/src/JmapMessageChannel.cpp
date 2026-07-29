@@ -23,8 +23,8 @@ NS_IMPL_ISUPPORTS_INHERITED(JmapMessageChannel, nsHashPropertyBag,
 JmapMessageChannel::JmapMessageChannel(nsIURI* uri, bool convert)
     : mConvert(convert),
       mURI(uri),
-      mContentDisposition(nsIChannel::DISPOSITION_INLINE),
       mContentLength(-1),
+      mContentDisposition(nsIChannel::DISPOSITION_INLINE),
       mLoadFlags(nsIRequest::LOAD_NORMAL),
       mPending(true),
       mStatus(NS_OK) {

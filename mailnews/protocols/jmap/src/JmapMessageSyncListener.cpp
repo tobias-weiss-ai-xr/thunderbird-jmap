@@ -77,7 +77,7 @@ JmapMessageSyncListener::ProcessMessageIds(
     rv = db->CreateNewHdrWithSpecificMsgKey(msgKey, getter_AddRefs(newHdr));
     if (NS_FAILED(rv)) {
       MOZ_LOG(gJmapLog, mozilla::LogLevel::Warning,
-              ("JMAP: failed to create header for key %llu", msgKey));
+              ("JMAP: failed to create header for key %u", msgKey));
       continue;
     }
 
@@ -92,7 +92,7 @@ JmapMessageSyncListener::ProcessMessageIds(
     if (NS_SUCCEEDED(rv)) {
       addedCount++;
       MOZ_LOG(gJmapLog, mozilla::LogLevel::Debug,
-              ("JMAP: added header for msgId=%s (key=%llu)",
+              ("JMAP: added header for msgId=%s (key=%u)",
                msgId.get(), msgKey));
     }
   }
